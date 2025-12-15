@@ -1,0 +1,106 @@
+load("@fbcode//quic:defs.bzl", "mvfst_cpp_library")
+load("@fbsource//tools/build_defs:fb_native_wrapper.bzl", "fb_native")
+
+oncall("traffic_protocols")
+
+mvfst_cpp_library(
+    name = "config",
+    headers = select({
+        "DEFAULT": select({
+            # @oss-only: "DEFAULT": {"mvfst-config.h": "//:mvfst-config.h"},
+            "DEFAULT": {"mvfst-config.h": "mvfst-config.h"},  # @fb-only
+            "ovr_config//os/constraints:android": {"mvfst-config.h": "facebook/mvfst-config-mobile.h"},  # @fb-only
+            "ovr_config//os/constraints:iphoneos": {"mvfst-config.h": "facebook/mvfst-config-mobile.h"},  # @fb-only
+        }),
+    }),
+    exported_deps = select({
+        "DEFAULT": [
+            "//folly:small_vector",  # @manual
+            "//folly/container:f14_hash",  # @manual
+            "//folly/container:heap_vector_types",  # @manual
+        ],
+        "ovr_config//os/constraints:android": [],  # @manual
+        "ovr_config//os/constraints:iphoneos": [],  # @manual
+    }),
+)
+
+mvfst_cpp_library(
+    name = "constants",
+    srcs = [
+        "QuicConstants.cpp",
+    ],
+    headers = [
+        "QuicConstants.h",
+        "QuicTypealiases.h",
+    ],
+    deps = [
+        "//folly/lang:assume",
+    ],
+    exported_deps = [
+        "//folly/chrono:clock",
+        "//folly/io:iobuf",
+        "//quic/common/third-party:better_enums",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "exception",
+    srcs = [
+        "QuicException.cpp",
+    ],
+    headers = [
+        "QuicException.h",
+    ],
+    exported_deps = [
+        ":constants",
+        ":tls_exception",
+        "//folly:range",
+        "//quic/common:optional",
+        "//quic/common:variant",
+    ],
+    external_deps = [
+        "glog",
+    ],
+)
+
+mvfst_cpp_library(
+    # @autodeps-skip
+    name = "tls_exception",
+    srcs = select({
+        "DEFAULT": ["QuicTLSExceptionFizz.cpp"],
+        "ovr_config//os/constraints:android": select({
+            "DEFAULT": ["facebook/mbed/QuicTLSExceptionMbed.cpp"],  # @fb-only
+            "ovr_config//build_mode/constraints:arvr_mode_enabled": ["QuicTLSExceptionFizz.cpp"],
+        }),
+        "ovr_config//os/constraints:iphoneos": ["facebook/mbed/QuicTLSExceptionMbed.cpp"],  # @fb-only
+    }),
+    headers = [
+        "QuicTLSException.h",
+    ],
+    deps = select({
+        "DEFAULT": [
+            "//fizz/record:record",
+        ],
+        "ovr_config//os/constraints:android": select({
+            "DEFAULT": [
+                "fbsource//xplat/mobilenetwork:tls_common",  # @manual
+            ],
+            "ovr_config//build_mode/constraints:arvr_mode_enabled": [
+                "//fizz/record:record",
+            ],
+        }),
+        "ovr_config//os/constraints:iphoneos": [
+            "fbsource//xplat/mobilenetwork:tls_common",  # @manual
+        ],
+    }),
+    exported_deps = [
+        ":constants",
+    ],
+)
+
+fb_native.export_file(
+    name = "src-tree",
+    src = ".",
+    mode = "reference",
+    visibility = ["PUBLIC"],
+)

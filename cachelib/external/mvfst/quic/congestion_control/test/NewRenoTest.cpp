@@ -1,0 +1,291 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#include <quic/congestion_control/NewReno.h>
+
+#include <folly/portability/GTest.h>
+#include <quic/common/test/TestUtils.h>
+#include <quic/congestion_control/test/Utils.h>
+#include <quic/fizz/server/handshake/FizzServerQuicHandshakeContext.h>
+
+using namespace testing;
+
+namespace quic::test {
+
+class NewRenoTest : public Test {};
+
+CongestionController::LossEvent createLossEvent(
+    std::vector<std::pair<PacketNum, size_t>> lostPackets) {
+  CongestionController::LossEvent loss;
+  auto connId = getTestConnectionId();
+  for (auto packetData : lostPackets) {
+    RegularQuicWritePacket packet(
+        ShortHeader(ProtectionType::KeyPhaseZero, connId, packetData.first));
+    loss.addLostPacket(OutstandingPacketWrapper(
+        std::move(packet),
+        Clock::now(),
+        0 /* pathId */,
+        10 /* encodedSize */,
+        0 /* encodedBodySize */,
+        10,
+        0 /* inflightBytes */,
+        LossState(),
+        0 /* writeCount */,
+        OutstandingPacketMetadata::DetailsPerStream()));
+    loss.lostBytes = packetData.second;
+  }
+  loss.lostPackets = lostPackets.size();
+  return loss;
+}
+
+CongestionController::AckEvent createAckEvent(
+    PacketNum largestAcked,
+    uint64_t ackedSize,
+    TimePoint packetSentTime) {
+  RegularQuicWritePacket packet(ShortHeader(
+      ProtectionType::KeyPhaseZero, getTestConnectionId(), largestAcked));
+  auto ackTime = Clock::now();
+  auto ack = AckEvent::Builder()
+                 .setAckTime(ackTime)
+                 .setAdjustedAckTime(ackTime)
+                 .setAckDelay(0us)
+                 .setPacketNumberSpace(PacketNumberSpace::AppData)
+                 .setLargestAckedPacket(largestAcked)
+                 .build();
+  ack.largestNewlyAckedPacket = largestAcked;
+  ack.ackedBytes = ackedSize;
+  ack.ackedPackets.push_back(
+      makeAckPacketFromOutstandingPacket(OutstandingPacketWrapper(
+          std::move(packet),
+          packetSentTime,
+          0 /* pathId */,
+          ackedSize /* encodedSize */,
+          0 /* encodedBodySize */,
+          ackedSize,
+          0 /* inflightBytes */,
+          LossState(),
+          0 /* writeCount */,
+          OutstandingPacketMetadata::DetailsPerStream())));
+  return ack;
+}
+
+OutstandingPacketWrapper createPacket(
+    PacketNum packetNum,
+    uint32_t size,
+    TimePoint sendTime,
+    uint64_t inflight = 0) {
+  auto connId = getTestConnectionId();
+  RegularQuicWritePacket packet(
+      ShortHeader(ProtectionType::KeyPhaseZero, connId, packetNum));
+  return OutstandingPacketWrapper(
+      std::move(packet),
+      sendTime,
+      0 /* pathId */,
+      size /* encodedSize */,
+      0 /* encodedBodySize */,
+      size,
+      inflight,
+      LossState(),
+      0 /* writeCount */,
+      OutstandingPacketMetadata::DetailsPerStream());
+}
+
+TEST_F(NewRenoTest, TestLoss) {
+  QuicServerConnectionState conn(
+      FizzServerQuicHandshakeContext::Builder().build());
+  NewReno reno(conn);
+  EXPECT_TRUE(reno.inSlowStart());
+
+  // Simulate largest sent.
+  conn.lossState.largestSent = 5;
+  PacketNum loss1 = 5;
+  // Lose packet less than previous one now.
+  PacketNum loss2 = 3;
+  // Lose packet greater than previous loss.
+  PacketNum loss3 = 11;
+  quic::test::onPacketsSentWrapper(
+      &conn, &reno, createPacket(loss2, 10, Clock::now()));
+  quic::test::onPacketsSentWrapper(
+      &conn, &reno, createPacket(loss1, 11, Clock::now()));
+  quic::test::onPacketsSentWrapper(
+      &conn, &reno, createPacket(loss3, 20, Clock::now()));
+  EXPECT_EQ(reno.getBytesInFlight(), 41);
+  auto originalWritableBytes = reno.getWritableBytes();
+
+  quic::test::onPacketAckOrLossWrapper(
+      &conn, &reno, std::nullopt, createLossEvent({std::make_pair(loss1, 11)}));
+  EXPECT_EQ(reno.getBytesInFlight(), 30);
+
+  EXPECT_FALSE(reno.inSlowStart());
+  auto newWritableBytes1 = reno.getWritableBytes();
+  EXPECT_LE(newWritableBytes1, originalWritableBytes + 11);
+
+  quic::test::onPacketAckOrLossWrapper(
+      &conn, &reno, std::nullopt, createLossEvent({std::make_pair(loss2, 10)}));
+  auto newWritableBytes2 = reno.getWritableBytes();
+  EXPECT_LE(newWritableBytes2, newWritableBytes1 + 10);
+  EXPECT_EQ(reno.getBytesInFlight(), 20);
+
+  quic::test::onPacketAckOrLossWrapper(
+      &conn, &reno, std::nullopt, createLossEvent({std::make_pair(loss3, 20)}));
+  auto newWritableBytes3 = reno.getWritableBytes();
+  EXPECT_LE(newWritableBytes3, newWritableBytes2 + 20);
+  EXPECT_EQ(reno.getBytesInFlight(), 0);
+}
+
+TEST_F(NewRenoTest, SendMoreThanWritable) {
+  QuicServerConnectionState conn(
+      FizzServerQuicHandshakeContext::Builder().build());
+  NewReno reno(conn);
+  EXPECT_TRUE(reno.inSlowStart());
+
+  PacketNum loss = 10;
+  auto originalWritableBytes = reno.getWritableBytes();
+  quic::test::onPacketsSentWrapper(
+      &conn,
+      &reno,
+      createPacket(loss, originalWritableBytes + 20, Clock::now()));
+  EXPECT_EQ(reno.getBytesInFlight(), originalWritableBytes + 20);
+  EXPECT_EQ(reno.getWritableBytes(), 0);
+  quic::test::onPacketAckOrLossWrapper(
+      &conn,
+      &reno,
+      std::nullopt,
+      createLossEvent({std::make_pair(loss, originalWritableBytes + 20)}));
+  EXPECT_LT(reno.getWritableBytes(), originalWritableBytes);
+}
+
+TEST_F(NewRenoTest, TestSlowStartAck) {
+  QuicServerConnectionState conn(
+      FizzServerQuicHandshakeContext::Builder().build());
+  NewReno reno(conn);
+  EXPECT_TRUE(reno.inSlowStart());
+
+  auto originalWritableBytes = reno.getWritableBytes();
+  PacketNum ackPacketNum1 = 10;
+  uint64_t ackedSize = 10;
+
+  auto packet = createPacket(ackPacketNum1, ackedSize, Clock::now());
+
+  quic::test::onPacketsSentWrapper(&conn, &reno, packet);
+  EXPECT_EQ(reno.getBytesInFlight(), ackedSize);
+  quic::test::onPacketAckOrLossWrapper(
+      &conn,
+      &reno,
+      createAckEvent(ackPacketNum1, ackedSize, packet.metadata.time),
+      std::nullopt);
+  EXPECT_TRUE(reno.inSlowStart());
+  auto newWritableBytes = reno.getWritableBytes();
+
+  EXPECT_EQ(newWritableBytes, originalWritableBytes + ackedSize);
+}
+
+TEST_F(NewRenoTest, TestSteadyStateAck) {
+  QuicServerConnectionState conn(
+      FizzServerQuicHandshakeContext::Builder().build());
+  NewReno reno(conn);
+  EXPECT_TRUE(reno.inSlowStart());
+
+  conn.lossState.largestSent = 5;
+  auto originalWritableBytes = reno.getWritableBytes();
+  PacketNum loss1 = 4;
+  quic::test::onPacketsSentWrapper(
+      &conn, &reno, createPacket(loss1, 10, Clock::now()));
+  quic::test::onPacketAckOrLossWrapper(
+      &conn, &reno, std::nullopt, createLossEvent({std::make_pair(loss1, 10)}));
+  EXPECT_FALSE(reno.inSlowStart());
+  auto newWritableBytes1 = reno.getWritableBytes();
+  EXPECT_LT(newWritableBytes1, originalWritableBytes);
+
+  PacketNum ackPacketNum1 = 4;
+  uint64_t ackedSize = 10;
+  auto packet1 = createPacket(
+      ackPacketNum1, ackedSize, Clock::now() - std::chrono::milliseconds(10));
+  quic::test::onPacketsSentWrapper(&conn, &reno, packet1);
+  quic::test::onPacketAckOrLossWrapper(
+      &conn,
+      &reno,
+      createAckEvent(ackPacketNum1, ackedSize, packet1.metadata.time),
+      std::nullopt);
+  EXPECT_FALSE(reno.inSlowStart());
+
+  auto newWritableBytes2 = reno.getWritableBytes();
+  EXPECT_EQ(newWritableBytes2, newWritableBytes1);
+
+  PacketNum ackPacketNum2 = 6;
+  auto packet2 = createPacket(ackPacketNum2, ackedSize, Clock::now());
+  quic::test::onPacketsSentWrapper(&conn, &reno, packet2);
+  quic::test::onPacketAckOrLossWrapper(
+      &conn,
+      &reno,
+      createAckEvent(ackPacketNum2, ackedSize, packet2.metadata.time),
+      std::nullopt);
+  EXPECT_FALSE(reno.inSlowStart());
+
+  auto newWritableBytes3 = reno.getWritableBytes();
+  EXPECT_EQ(
+      newWritableBytes3,
+      newWritableBytes2 +
+          ((kDefaultUDPSendPacketLen * ackedSize) / newWritableBytes2));
+}
+
+TEST_F(NewRenoTest, TestWritableBytes) {
+  QuicServerConnectionState conn(
+      FizzServerQuicHandshakeContext::Builder().build());
+  NewReno reno(conn);
+  EXPECT_TRUE(reno.inSlowStart());
+
+  conn.lossState.largestSent = 5;
+  PacketNum ackPacketNum = 6;
+  uint64_t writableBytes = reno.getWritableBytes();
+  quic::test::onPacketsSentWrapper(
+      &conn,
+      &reno,
+      createPacket(ackPacketNum, writableBytes - 10, Clock::now()));
+  EXPECT_EQ(reno.getWritableBytes(), 10);
+  quic::test::onPacketsSentWrapper(
+      &conn, &reno, createPacket(ackPacketNum, 20, Clock::now()));
+  EXPECT_EQ(reno.getWritableBytes(), 0);
+}
+
+TEST_F(NewRenoTest, PersistentCongestion) {
+  QuicServerConnectionState conn(
+      FizzServerQuicHandshakeContext::Builder().build());
+  NewReno reno(conn);
+  EXPECT_TRUE(reno.inSlowStart());
+
+  conn.lossState.largestSent = 5;
+  PacketNum ackPacketNum = 6;
+  uint32_t ackedSize = 10;
+  auto pkt = createPacket(ackPacketNum, ackedSize, Clock::now());
+  quic::test::onPacketsSentWrapper(&conn, &reno, pkt);
+  CongestionController::LossEvent loss;
+  loss.persistentCongestion = true;
+  loss.addLostPacket(pkt);
+  quic::test::onPacketAckOrLossWrapper(&conn, &reno, std::nullopt, loss);
+  EXPECT_EQ(
+      reno.getWritableBytes(),
+      conn.transportSettings.minCwndInMss * conn.udpSendPacketLen);
+  EXPECT_TRUE(reno.inSlowStart());
+}
+
+TEST_F(NewRenoTest, RemoveBytesWithoutLossOrAck) {
+  QuicServerConnectionState conn(
+      FizzServerQuicHandshakeContext::Builder().build());
+  NewReno reno(conn);
+  EXPECT_TRUE(reno.inSlowStart());
+
+  auto originalWritableBytes = reno.getWritableBytes();
+  conn.lossState.largestSent = 5;
+  PacketNum ackPacketNum = 6;
+  uint32_t ackedSize = 10;
+  quic::test::onPacketsSentWrapper(
+      &conn, &reno, createPacket(ackPacketNum, ackedSize, Clock::now()));
+  quic::test::removeBytesFromInflight(&conn, 2, &reno);
+  EXPECT_EQ(reno.getWritableBytes(), originalWritableBytes - ackedSize + 2);
+}
+} // namespace quic::test

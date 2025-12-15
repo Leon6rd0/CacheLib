@@ -15,8 +15,8 @@ build-sparsemap/
 build-wangle/
 
 # Required source-code dependencies, fetched by ./contrib/ scripts.
-cachelib/external/fmt/
-cachelib/external/gflags/
-cachelib/external/glog/
-cachelib/external/googletest/
-cachelib/external/sparsemap/
+#cachelib/external/fmt/
+#cachelib/external/gflags/
+#cachelib/external/glog/
+#cachelib/external/googletest/
+#cachelib/external/sparsemap/

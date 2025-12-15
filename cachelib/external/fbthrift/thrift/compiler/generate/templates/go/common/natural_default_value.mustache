@@ -1,0 +1,65 @@
+{{!
+
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+}}{{!
+
+  This template defines a Thrift natural default value for a given type.
+
+  Natural default values are values assigned to Thrift fields/variables
+  by default in the abscence of explicit user-provided default values.
+  Natural default values are based on Thrift specification.
+
+  All type values are rendered as "concrete" values, except for structs - which
+  are rendered as struct pointers. Callers are responsible for dereferencing
+  appropriately if needed.
+
+  The following templates have complete type parity:
+    * const/value.mustache
+    * common/natural_default_value.mustache
+    * common/go_zero_value.mustache
+
+}}{{#type:typedef?}}{{!
+  }}{{#type:typedef}}{{!
+    }}{{#typedef:defined_kind?}}{{!
+      }}{{typedef:go_qualified_new_func}}(){{!
+    }}{{/typedef:defined_kind?}}{{!
+    }}{{^typedef:defined_kind?}}{{!
+      }}{{#type:typedef_type}}{{!
+        }}{{> common/natural_default_value}}{{!
+      }}{{/type:typedef_type}}{{!
+    }}{{/typedef:defined_kind?}}{{!
+  }}{{/type:typedef}}{{!
+}}{{/type:typedef?}}{{!
+}}{{^type:typedef?}}{{!
+  }}{{#type:string?}}""{{/type:string?}}{{!
+  }}{{#type:binary?}}[]byte(""){{/type:binary?}}{{!
+  }}{{#type:bool?}}false{{/type:bool?}}{{!
+  }}{{#type:byte?}}0{{/type:byte?}}{{!
+  }}{{#type:i16?}}0{{/type:i16?}}{{!
+  }}{{#type:i32?}}0{{/type:i32?}}{{!
+  }}{{#type:i64?}}0{{/type:i64?}}{{!
+  }}{{#type:double?}}0.0{{/type:double?}}{{!
+  }}{{#type:float?}}0.0{{/type:float?}}{{!
+  }}{{#type:enum?}}0{{/type:enum?}}{{!
+  }}{{#type:list?}}make({{#partial types.go_type type=type:self}}, 0){{/type:list?}}{{!
+  }}{{#type:set?}}make({{#partial types.go_type type=type:self}}, 0){{/type:set?}}{{!
+  }}{{#type:map?}}make({{#partial types.go_type type=type:self}}){{/type:map?}}{{!
+  }}{{#type:structured?}}{{!
+    }}{{#type:structured}}{{!
+      }}{{struct:go_qualified_new_func}}(){{!
+    }}{{/type:structured}}{{!
+  }}{{/type:structured?}}{{!
+}}{{/type:typedef?}}

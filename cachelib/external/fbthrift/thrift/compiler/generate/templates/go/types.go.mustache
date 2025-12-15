@@ -1,0 +1,72 @@
+{{!
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+}}
+{{#import "common/constants" as constants}}
+{{#import "common/type" as types}}
+{{> common/auto_generated_go}}
+
+package {{program:go_pkg_name}}
+
+import (
+    "fmt"
+    "reflect"
+
+    {{#program:thrift_imports}}
+    {{program:go_package_alias}} "{{program:go_import_path}}"
+    {{/program:thrift_imports}}
+    thrift "{{constants.thrift_lib_import}}"
+    {{#program:gen_metadata?}}
+    {{#program:import_metadata_package?}}
+    metadata "{{constants.thrift_metadata_import}}"
+    {{/program:import_metadata_package?}}
+    {{/program:gen_metadata?}}
+)
+
+// (needed to ensure safety because of naive import list construction)
+{{> common/unused_imports_protection}}
+var _ = fmt.Printf
+var _ = reflect.Ptr
+var _ = thrift.VOID
+{{#program:gen_metadata?}}
+{{#program:import_metadata_package?}}
+var _ = metadata.GoUnusedProtection__
+{{/program:import_metadata_package?}}
+{{/program:gen_metadata?}}
+
+{{! Typedefs }}
+{{#program:typedefs}}
+{{> types/typedef}}
+
+{{/program:typedefs}}
+{{! Enums }}
+{{#program:enums}}
+{{> types/enum}}
+
+{{/program:enums}}
+{{! Structs }}
+{{#program:structs}}
+{{> types/struct}}
+
+{{/program:structs}}
+{{! Req/resp srtucts }}
+{{#program:req_resp_structs}}
+{{> types/struct}}
+
+{{/program:req_resp_structs}}
+
+{{#program:structs?}}
+{{> common/registry}}
+{{/program:structs?}}

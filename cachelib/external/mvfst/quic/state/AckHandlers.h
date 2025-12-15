@@ -1,0 +1,131 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#pragma once
+
+#include <quic/QuicConstants.h>
+#include <quic/codec/Types.h>
+#include <quic/common/Expected.h>
+#include <quic/common/IntervalSet.h>
+#include <quic/state/StateData.h>
+#include <functional>
+
+namespace quic {
+
+using AckVisitor = std::function<void(
+    const OutstandingPacketWrapper&,
+    const QuicWriteFrame&,
+    const ReadAckFrame&)>;
+
+using AckedPacketVisitor = std::function<quic::Expected<void, QuicError>(
+    const OutstandingPacketWrapper&)>; // outstanding packet acked
+
+using AckedFrameVisitor = std::function<quic::Expected<void, QuicError>(
+    const OutstandingPacketWrapper&, // outstanding packet acked
+    const QuicWriteFrame&)>; // outstanding frame acked
+
+/**
+ * Processes an ack frame and removes any outstanding packets.
+ */
+void removeOutstandingsForAck(
+    QuicConnectionStateBase& conn,
+    PacketNumberSpace pnSpace,
+    const ReadAckFrame& frame);
+
+/**
+ * Processes an ack frame and removes any outstanding packets
+ * from the connection that have already been sent.
+ *
+ * Returns AckEvent with information about what was observed during processing
+ */
+[[nodiscard]] quic::Expected<AckEvent, QuicError> processAckFrame(
+    QuicConnectionStateBase& conn,
+    PacketNumberSpace pnSpace,
+    const ReadAckFrame& ackFrame,
+    const AckedPacketVisitor& ackedPacketVisitor,
+    const AckedFrameVisitor& ackedFrameVisitor,
+    const LossVisitor& lossVisitor,
+    const TimePoint& ackReceiveTime);
+
+/**
+ * Clears outstanding packets marked as lost that are not likely to be ACKed
+ * (have been lost for >= 1 PTO).
+ */
+void clearOldOutstandingPackets(
+    QuicConnectionStateBase& outstandings,
+    TimePoint time,
+    PacketNumberSpace pnSpace);
+
+/**
+ * Visitor function to be invoked when we receive an ACK of the WriteAckFrame
+ * that we sent.
+ */
+void commonAckVisitorForAckFrame(
+    AckState& ackState,
+    const WriteAckFrame& frame);
+
+/**
+ * Parse Receive timestamps from ACK frame into a UnorderedMap of packet
+ * number to timestamps and return the latest received packet with timestamp if
+ * any.
+ */
+void parseAckReceiveTimestamps(
+    const QuicConnectionStateBase& conn,
+    const quic::ReadAckFrame& frame,
+    UnorderedMap<PacketNum, uint64_t>& packetReceiveTimeStamps,
+    Optional<PacketNum> firstPacketNum);
+
+/**
+ * An RTT sample is generated using only the largest acknowledged packet
+ * in the received ACK frame. To avoid generating multiple RTT samples
+ * for a single packet, an ACK frame SHOULD NOT be used to update RTT
+ * estimates if it does not newly acknowledge the largest acknowledged
+ * packet (RFC9002). This includes for minRTT estimates.
+ */
+void updateRttForLargestAckedPacket(
+    AckEvent& ackEvent,
+    QuicConnectionStateBase& conn,
+    OutstandingPacketWrapper& packet,
+    const ReadAckFrame& frame,
+    const TimePoint& ackReceiveTime);
+
+/**
+ * Update the outgoing ECN marking count for an outstanding packet that has been
+ * acked. If a packet is acked and the connection is using ECN/L4S, this
+ * function updates the ackState to expect more ECN marks to be echoed by the
+ * peer.
+ *
+ * Note: that we don't track the value of the actual mark sent in the packet.
+ * (1) This is fine because we do not allow the ECN mark to change during the
+ * lifetime of a connection. It can only be turned off if ECN marking validation
+ * fails.
+ * (2) This avoids adding more fields to the outstanding packet metadata.
+ *
+ * Note: Since only ack-eliciting packets are tracked as outstanding packets,
+ * the ECN count tracked by this function is only a minimum. Non-ack eliciting
+ * packets that are acked will not hit this function.
+ */
+void incrementEcnCountForAckedPacket(
+    QuicConnectionStateBase& conn,
+    PacketNumberSpace pnSpace);
+
+/**
+ * Update the ECN counts echoed by the pear in its ACK frame
+ */
+void updateEcnCountEchoed(
+    QuicConnectionStateBase& conn,
+    PacketNumberSpace pnSpace,
+    const ReadAckFrame& readAckFrame);
+
+/**
+ * Modifies the state in the QuicConnectionStateBase when a packet that
+ * was marked as lost is acked.
+ */
+[[nodiscard]] Expected<void, IntervalSetError> modifyStateForSpuriousLoss(
+    QuicConnectionStateBase& conn,
+    OutstandingPacketWrapper& spuriouslyLostPacket);
+} // namespace quic

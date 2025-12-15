@@ -1,0 +1,73 @@
+load("@fbcode//registry:defs.bzl", "rpm")
+load("@fbcode_macros//build_defs:build_file_migration.bzl", "fbcode_target")
+load("@fbcode_macros//build_defs:export_files.bzl", "export_files")
+load("@fbsource//tools/build_defs:fb_native_wrapper.bzl", "fb_native")
+load(":defs.bzl", "fizz_cpp_library")
+load(":fizzy_defs.bzl", "fizzy_library")
+
+oncall("secure_pipes")
+
+fizzy_library(
+    # @autodeps-skip
+    name = "fizzy",
+)
+
+fizz_cpp_library(
+    name = "config",
+    headers = select({
+        "DEFAULT": select({
+            "DEFAULT": {"fizz-config.h": "//:fizz-config.h"}, # @oss-only
+            # @fb-only[end= ]: "DEFAULT": {"fizz-config.h": "facebook/fizz-config-xplat.h"},
+            # @fb-only[end= ]: "ovr_config//runtime:fbcode": {"fizz-config.h": "facebook/fizz-config-fbcode.h"},
+        }),
+        # @fb-only[end= ]: "fbsource//xplat/fizz/constraints:mnscrypto-only": {"fizz-config.h": "facebook/fizz-config-mnscrypto-only.h"},
+        # @fb-only[end= ]: "fbsource//xplat/fizz/constraints:xplat": {"fizz-config.h": "facebook/fizz-config-xplat.h"},
+        # @fb-only[end= ]: "ovr_config//toolchain/fb:arista": {"fizz-config.h": "facebook/fizz-config-xplat.h"},
+    }),
+    # Each individual tunable should have its own select().
+    propagated_pp_flags = select({
+        "DEFAULT": ["-DFIZZ_HAVE_OQS"],
+        "fbsource//xplat/fizz/constraints:oqs-disabled": [],
+    }),
+)
+
+fbcode_target(
+    _kind = export_files,
+    files = [
+        "cmake/CheckAtomic.cmake",
+        "cmake/FindGMock.cmake",
+        "cmake/FindLibevent.cmake",
+        "cmake/FindLibrt.cmake",
+        "cmake/fizz-config.cmake.in",
+        "cmake/FizzOptions.cmake",
+        "CMakeListsForBuck2.txt",
+        "fizz-config.h.in",
+    ],
+)
+
+rpm.builder(
+    name = "fb-fizz",
+    autoclean_keep_versions = 200,
+    configurations = [
+        rpm.configuration(
+            arch = "x86_64",
+        ),
+        rpm.configuration(
+            arch = "aarch64",
+        ),
+    ],
+    features = [
+        rpm.install(
+            src = "fbcode//fizz/tool:fizz",
+            dst = "/usr/local/bin/fizz",
+        ),
+    ],
+    summary = "Fizz TLS library command-line tool",
+)
+
+fb_native.export_file(
+    name = "src-tree",
+    src = ".",
+    mode = "reference",
+    visibility = ["PUBLIC"],
+)

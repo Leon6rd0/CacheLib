@@ -1,0 +1,435 @@
+/*
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <quic/state/StateData.h>
+#include <quic/state/StreamData.h>
+
+using namespace quic;
+using namespace testing;
+
+namespace quic::test {
+
+BufPtr createBuffer(uint32_t len) {
+  auto buf = folly::IOBuf::create(len);
+  buf->append(len);
+  return buf;
+}
+
+std::unique_ptr<WriteStreamBuffer>
+createWriteStreamBuffer(uint32_t offset, BufPtr& buf, bool eof) {
+  ChainedByteRangeHead cbrh(buf);
+  return std::make_unique<WriteStreamBuffer>(std::move(cbrh), offset, eof);
+}
+
+void addDataToBufQueue(BufQueue& bufQueue, uint32_t len) {
+  auto buf = folly::IOBuf::create(len);
+  buf->append(len);
+  bufQueue.append(std::move(buf));
+}
+
+TEST(StreamDataTest, LossBufferRemovalAll) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.insertIntoLossBuffer(createWriteStreamBuffer(1, buf1, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(5, buf2, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromLossBufStartingAtOffset(1);
+  EXPECT_EQ(state.lossBuffer.size(), 0);
+}
+
+TEST(StreamDataTest, LossBufferRemovalExactMatch) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.insertIntoLossBuffer(createWriteStreamBuffer(1, buf1, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(5, buf2, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromLossBufStartingAtOffset(5);
+  EXPECT_EQ(state.lossBuffer.size(), 1);
+  EXPECT_EQ(state.lossBuffer[0].offset, 1);
+  EXPECT_EQ(state.lossBuffer[0].data.chainLength(), 2);
+}
+
+TEST(StreamDataTest, LossBufferRemovalPartialMatch) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.insertIntoLossBuffer(createWriteStreamBuffer(1, buf1, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(5, buf2, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromLossBufStartingAtOffset(6);
+  EXPECT_EQ(state.lossBuffer.size(), 2);
+
+  EXPECT_EQ(state.lossBuffer[0].offset, 1);
+  EXPECT_EQ(state.lossBuffer[0].data.chainLength(), 2);
+
+  EXPECT_EQ(state.lossBuffer[1].offset, 5);
+  EXPECT_EQ(state.lossBuffer[1].data.chainLength(), 1);
+}
+
+TEST(StreamDataTest, LossBufferRemovalNoMatch) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.insertIntoLossBuffer(createWriteStreamBuffer(1, buf1, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(5, buf2, false));
+  state.insertIntoLossBuffer(createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromLossBufStartingAtOffset(21);
+  EXPECT_EQ(state.lossBuffer.size(), 3);
+
+  EXPECT_EQ(state.lossBuffer[0].offset, 1);
+  EXPECT_EQ(state.lossBuffer[0].data.chainLength(), 2);
+
+  EXPECT_EQ(state.lossBuffer[1].offset, 5);
+  EXPECT_EQ(state.lossBuffer[1].data.chainLength(), 8);
+
+  EXPECT_EQ(state.lossBuffer[2].offset, 17);
+  EXPECT_EQ(state.lossBuffer[2].data.chainLength(), 3);
+}
+
+TEST(StreamDataTest, RetxBufferRemovalAll) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.retransmissionBuffer.emplace(
+      1, createWriteStreamBuffer(1, buf1, false));
+  state.retransmissionBuffer.emplace(
+      5, createWriteStreamBuffer(5, buf2, false));
+  state.retransmissionBuffer.emplace(
+      17, createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromRetransmissionBufStartingAtOffset(1);
+  EXPECT_EQ(state.retransmissionBuffer.size(), 0);
+}
+
+TEST(StreamDataTest, RetxBufferRemovalExactMatch) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.retransmissionBuffer.emplace(
+      1, createWriteStreamBuffer(1, buf1, false));
+  state.retransmissionBuffer.emplace(
+      5, createWriteStreamBuffer(5, buf2, false));
+  state.retransmissionBuffer.emplace(
+      17, createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromRetransmissionBufStartingAtOffset(17);
+  EXPECT_EQ(state.retransmissionBuffer.size(), 2);
+
+  EXPECT_EQ(state.retransmissionBuffer[1]->offset, 1);
+  EXPECT_EQ(state.retransmissionBuffer[1]->data.chainLength(), 2);
+
+  EXPECT_EQ(state.retransmissionBuffer[5]->offset, 5);
+  EXPECT_EQ(state.retransmissionBuffer[5]->data.chainLength(), 8);
+}
+
+TEST(StreamDataTest, RetxBufferRemovalPartialMatch) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.retransmissionBuffer.emplace(
+      1, createWriteStreamBuffer(1, buf1, false));
+  state.retransmissionBuffer.emplace(
+      5, createWriteStreamBuffer(5, buf2, false));
+  state.retransmissionBuffer.emplace(
+      17, createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromRetransmissionBufStartingAtOffset(6);
+  EXPECT_EQ(state.retransmissionBuffer.size(), 2);
+
+  EXPECT_EQ(state.retransmissionBuffer[1]->offset, 1);
+  EXPECT_EQ(state.retransmissionBuffer[1]->data.chainLength(), 2);
+
+  EXPECT_EQ(state.retransmissionBuffer[5]->offset, 5);
+  EXPECT_EQ(state.retransmissionBuffer[5]->data.chainLength(), 1);
+}
+
+TEST(StreamDataTest, RetxBufferRemovalNoMatch) {
+  QuicStreamLike state;
+  // [1, 2] [5, 12] [17, 19]
+  auto buf1 = createBuffer(2);
+  auto buf2 = createBuffer(8);
+  auto buf3 = createBuffer(3);
+  state.retransmissionBuffer.emplace(
+      1, createWriteStreamBuffer(1, buf1, false));
+  state.retransmissionBuffer.emplace(
+      5, createWriteStreamBuffer(5, buf2, false));
+  state.retransmissionBuffer.emplace(
+      17, createWriteStreamBuffer(17, buf3, false));
+
+  state.removeFromRetransmissionBufStartingAtOffset(20);
+  EXPECT_EQ(state.retransmissionBuffer.size(), 3);
+
+  EXPECT_EQ(state.retransmissionBuffer[1]->offset, 1);
+  EXPECT_EQ(state.retransmissionBuffer[1]->data.chainLength(), 2);
+
+  EXPECT_EQ(state.retransmissionBuffer[5]->offset, 5);
+  EXPECT_EQ(state.retransmissionBuffer[5]->data.chainLength(), 8);
+
+  EXPECT_EQ(state.retransmissionBuffer[17]->offset, 17);
+  EXPECT_EQ(state.retransmissionBuffer[17]->data.chainLength(), 3);
+}
+
+TEST(StreamDataTest, WriteBufferRemovalAll) {
+  QuicStreamLike state;
+  state.writeBufferStartOffset = 5;
+
+  // [5, 16]
+  addDataToBufQueue(state.writeBuffer, 3);
+  addDataToBufQueue(state.writeBuffer, 2);
+  addDataToBufQueue(state.writeBuffer, 7);
+
+  state.removeFromWriteBufStartingAtOffset(1);
+  EXPECT_EQ(state.writeBuffer.chainLength(), 0);
+}
+
+TEST(StreamDataTest, WriteBufferRemoval) {
+  QuicStreamLike state;
+  state.writeBufferStartOffset = 5;
+
+  // [5, 16]
+  addDataToBufQueue(state.writeBuffer, 3);
+  addDataToBufQueue(state.writeBuffer, 2);
+  addDataToBufQueue(state.writeBuffer, 7);
+
+  state.removeFromWriteBufStartingAtOffset(6);
+  EXPECT_EQ(state.writeBuffer.chainLength(), 1);
+}
+
+TEST(StreamDataTest, WriteBufferRemovalNoChange) {
+  QuicStreamLike state;
+  state.writeBufferStartOffset = 5;
+
+  // [5, 16]
+  addDataToBufQueue(state.writeBuffer, 3);
+  addDataToBufQueue(state.writeBuffer, 2);
+  addDataToBufQueue(state.writeBuffer, 7);
+
+  state.removeFromWriteBufStartingAtOffset(17);
+  EXPECT_EQ(state.writeBuffer.chainLength(), 12);
+}
+
+TEST(StreamDataTest, PendingWritesRemovalAll) {
+  QuicStreamLike state;
+  state.currentWriteOffset = 5;
+
+  // [5, 12]
+  BufPtr buf1 = folly::IOBuf::create(3);
+  buf1->append(3);
+  BufPtr buf2 = folly::IOBuf::create(5);
+  buf2->append(5);
+  buf1->appendChain(std::move(buf2));
+
+  state.pendingWrites = ChainedByteRangeHead(buf1);
+  state.removeFromPendingWritesStartingAtOffset(1);
+  EXPECT_EQ(state.pendingWrites.chainLength(), 0);
+}
+
+TEST(StreamDataTest, PendingWritesRemoval) {
+  QuicStreamLike state;
+  state.currentWriteOffset = 5;
+
+  // [5, 12]
+  BufPtr buf1 = folly::IOBuf::create(3);
+  buf1->append(3);
+  BufPtr buf2 = folly::IOBuf::create(5);
+  buf2->append(5);
+  buf1->appendChain(std::move(buf2));
+
+  state.pendingWrites = ChainedByteRangeHead(buf1);
+  state.removeFromPendingWritesStartingAtOffset(12);
+  EXPECT_EQ(state.pendingWrites.chainLength(), 7);
+}
+
+TEST(StreamDataTest, PendingWritesRemovalNoChange) {
+  QuicStreamLike state;
+  state.currentWriteOffset = 5;
+
+  // [5, 12]
+  BufPtr buf1 = folly::IOBuf::create(3);
+  buf1->append(3);
+  BufPtr buf2 = folly::IOBuf::create(5);
+  buf2->append(5);
+  buf1->appendChain(std::move(buf2));
+
+  state.pendingWrites = ChainedByteRangeHead(buf1);
+  state.removeFromPendingWritesStartingAtOffset(13);
+  EXPECT_EQ(state.pendingWrites.chainLength(), 8);
+}
+
+TEST(StreamDataTest, ReadBufferRemovalAll) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  // [1, 2] [5, 12] [17, 19]
+  BufPtr buf1 = folly::IOBuf::create(2);
+  buf1->append(2);
+  state.readBuffer.emplace_back(std::move(buf1), 1);
+
+  BufPtr buf2 = folly::IOBuf::create(8);
+  buf2->append(8);
+  state.readBuffer.emplace_back(std::move(buf2), 5);
+
+  BufPtr buf3 = folly::IOBuf::create(3);
+  buf3->append(3);
+  state.readBuffer.emplace_back(std::move(buf3), 17);
+
+  state.removeFromReadBufferStartingAtOffset(1);
+  EXPECT_EQ(state.readBuffer.size(), 0);
+}
+
+TEST(StreamDataTest, ReadBufferRemovalExactMatch) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  // [1, 2] [5, 12] [17, 19]
+  BufPtr buf1 = folly::IOBuf::create(2);
+  buf1->append(2);
+  state.readBuffer.emplace_back(std::move(buf1), 1);
+
+  BufPtr buf2 = folly::IOBuf::create(8);
+  buf2->append(8);
+  state.readBuffer.emplace_back(std::move(buf2), 5);
+
+  BufPtr buf3 = folly::IOBuf::create(3);
+  buf3->append(3);
+  state.readBuffer.emplace_back(std::move(buf3), 17);
+
+  state.removeFromReadBufferStartingAtOffset(17);
+  EXPECT_EQ(state.readBuffer.size(), 2);
+
+  EXPECT_EQ(state.readBuffer[0].offset, 1);
+  EXPECT_EQ(state.readBuffer[0].data.chainLength(), 2);
+
+  EXPECT_EQ(state.readBuffer[1].offset, 5);
+  EXPECT_EQ(state.readBuffer[1].data.chainLength(), 8);
+}
+
+TEST(StreamDataTest, ReadBufferRemovalPartialMatch) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  // [1, 2] [5, 12] [17, 19]
+  BufPtr buf1 = folly::IOBuf::create(2);
+  buf1->append(2);
+  state.readBuffer.emplace_back(std::move(buf1), 1);
+
+  BufPtr buf2 = folly::IOBuf::create(8);
+  buf2->append(8);
+  state.readBuffer.emplace_back(std::move(buf2), 5);
+
+  BufPtr buf3 = folly::IOBuf::create(3);
+  buf3->append(3);
+  state.readBuffer.emplace_back(std::move(buf3), 17);
+
+  state.removeFromReadBufferStartingAtOffset(6);
+  EXPECT_EQ(state.readBuffer.size(), 2);
+
+  EXPECT_EQ(state.readBuffer[0].offset, 1);
+  EXPECT_EQ(state.readBuffer[0].data.chainLength(), 2);
+
+  EXPECT_EQ(state.readBuffer[1].offset, 5);
+  EXPECT_EQ(state.readBuffer[1].data.chainLength(), 1);
+}
+
+TEST(StreamDataTest, ReadBufferRemovalNoMatch) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  // [1, 2] [5, 12] [17, 19]
+  BufPtr buf1 = folly::IOBuf::create(2);
+  buf1->append(2);
+  state.readBuffer.emplace_back(std::move(buf1), 1);
+
+  BufPtr buf2 = folly::IOBuf::create(8);
+  buf2->append(8);
+  state.readBuffer.emplace_back(std::move(buf2), 5);
+
+  BufPtr buf3 = folly::IOBuf::create(3);
+  buf3->append(3);
+  state.readBuffer.emplace_back(std::move(buf3), 17);
+
+  state.removeFromReadBufferStartingAtOffset(20);
+  EXPECT_EQ(state.readBuffer.size(), 3);
+
+  EXPECT_EQ(state.readBuffer[0].offset, 1);
+  EXPECT_EQ(state.readBuffer[0].data.chainLength(), 2);
+
+  EXPECT_EQ(state.readBuffer[1].offset, 5);
+  EXPECT_EQ(state.readBuffer[1].data.chainLength(), 8);
+
+  EXPECT_EQ(state.readBuffer[2].offset, 17);
+  EXPECT_EQ(state.readBuffer[2].data.chainLength(), 3);
+}
+
+TEST(StreamDataTest, AllBytesAckedTillEmptyAck) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  EXPECT_TRUE(state.ackedIntervals.empty());
+  EXPECT_EQ(state.allBytesAckedTill(0), false);
+}
+
+TEST(StreamDataTest, AllBytesAckedTillNotStartAtZero) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  EXPECT_TRUE(state.ackedIntervals.empty());
+  ASSERT_TRUE(state.updateAckedIntervals(1, 5, false).has_value());
+  EXPECT_EQ(state.allBytesAckedTill(5), false);
+}
+
+TEST(StreamDataTest, AllBytesAckedTillNotEnoughLength) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  EXPECT_TRUE(state.ackedIntervals.empty());
+  ASSERT_TRUE(state.updateAckedIntervals(0, 5, false).has_value());
+  EXPECT_EQ(state.allBytesAckedTill(5), false);
+}
+
+TEST(StreamDataTest, AllBytesAckedPass) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  EXPECT_TRUE(state.ackedIntervals.empty());
+  ASSERT_TRUE(state.updateAckedIntervals(0, 6, false).has_value());
+  EXPECT_EQ(state.allBytesAckedTill(5), true);
+}
+
+TEST(StreamDataTest, AllBytesAckedDisjointIntervals) {
+  QuicConnectionStateBase qcsb(QuicNodeType::Client);
+  QuicStreamState state(0, qcsb);
+
+  EXPECT_TRUE(state.ackedIntervals.empty());
+  ASSERT_TRUE(state.updateAckedIntervals(0, 2, false).has_value());
+  ASSERT_TRUE(state.updateAckedIntervals(3, 5, false).has_value());
+  EXPECT_EQ(state.allBytesAckedTill(5), false);
+}
+
+} // namespace quic::test

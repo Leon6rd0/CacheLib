@@ -1,0 +1,245 @@
+load("@fbcode//quic:defs.bzl", "mvfst_cpp_library")
+
+oncall("traffic_protocols")
+
+mvfst_cpp_library(
+    name = "interval_set",
+    headers = [
+        "IntervalSet.h",
+        "IntervalSet-inl.h",
+    ],
+    exported_deps = [
+        ":expected",
+        ":optional",
+        "//folly:likely",
+    ],
+    exported_external_deps = [
+        "glog",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "quic_buffer",
+    srcs = [
+        "QuicBuffer.cpp",
+    ],
+    headers = [
+        "QuicBuffer.h",
+        "QuicRange.h",
+    ],
+    deps = [],
+    exported_deps = [
+        "//folly/portability:sys_uio",
+    ],
+    external_deps = [
+        "glog",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "looper",
+    srcs = [
+        "FunctionLooper.cpp",
+    ],
+    headers = [
+        "FunctionLooper.h",
+    ],
+    deps = [
+        "//folly:scope_guard",
+    ],
+    exported_deps = [
+        ":optional",
+        "//folly/io/async:delayed_destruction",
+        "//quic:constants",
+        "//quic/common/events:eventbase",
+        "//quic/common/events:quic_timer",
+    ],
+    external_deps = [
+        "glog",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "variant",
+    headers = [
+        "Variant.h",
+    ],
+    exported_deps = [],
+)
+
+mvfst_cpp_library(
+    name = "buf_accessor",
+    srcs = [
+        "BufAccessor.cpp",
+    ],
+    headers = [
+        "BufAccessor.h",
+    ],
+    exported_deps = [
+        "//folly/io:iobuf",
+        "//quic:constants",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "buf_util",
+    srcs = [
+        "BufUtil.cpp",
+        "ChainedByteRange.cpp",
+    ],
+    headers = [
+        "BufUtil.h",
+        "ChainedByteRange.h",
+    ],
+    exported_deps = [
+        "//folly:range",
+        "//folly/io:iobuf",
+        "//quic:constants",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "enum_array",
+    headers = [
+        "EnumArray.h",
+    ],
+    exported_deps = [
+        "//folly:portability",
+    ],
+    exported_external_deps = [
+        "glog",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "socket_util",
+    headers = [
+        "SocketUtil.h",
+    ],
+    exported_deps = [
+        ":expected",
+        "//folly/io:socket_option_map",
+        "//folly/net:net_ops",
+        "//quic:exception",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "string_utils",
+    srcs = [
+        "StringUtils.cpp",
+    ],
+    headers = [
+        "StringUtils.h",
+    ],
+    deps = [
+        "fbsource//third-party/fmt:fmt",
+        "//quic:constants",
+    ],
+    exported_deps = [
+        ":expected",
+        "//quic:exception",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "circular_deque",
+    headers = [
+        "CircularDeque.h",
+        "CircularDeque-inl.h",
+    ],
+    exported_external_deps = [
+        "glog",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "network_data",
+    headers = [
+        "NetworkData.h",
+    ],
+    exported_deps = [
+        ":buf_util",
+        ":optional",
+        ":time_points",
+        "//quic:constants",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "time_points",
+    headers = [
+        "TimePoints.h",
+    ],
+    exported_deps = [
+        ":optional",
+        "//quic:constants",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "time_util",
+    headers = [
+        "TimeUtil.h",
+    ],
+    exported_deps = [
+        "//folly:traits",
+        "//quic:constants",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "transport_knobs",
+    srcs = [
+        "TransportKnobs.cpp",
+    ],
+    headers = [
+        "TransportKnobs.h",
+    ],
+    deps = [
+        "//folly:dynamic",
+        "//quic:constants",
+    ],
+    exported_deps = [
+        ":optional",
+    ],
+    external_deps = [
+        "glog",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "optional",
+    headers = [
+        "Optional.h",
+    ],
+    exported_deps = [
+        "//quic/common/third-party:tiny_optional",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "contiguous_cursor",
+    srcs = ["ContiguousCursor.cpp"],
+    headers = [
+        "ContiguousCursor.h",
+    ],
+    deps = [
+        "//folly:likely",
+    ],
+    exported_deps = [
+        "//folly:utility",
+        "//folly/lang:bits",
+        "//quic:constants",
+    ],
+)
+
+mvfst_cpp_library(
+    name = "expected",
+    headers = [
+        "Expected.h",
+    ],
+    exported_deps = [
+        "//quic/common/third-party:expected",
+    ],
+)

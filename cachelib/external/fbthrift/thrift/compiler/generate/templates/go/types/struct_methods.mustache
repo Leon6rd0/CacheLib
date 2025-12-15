@@ -1,0 +1,93 @@
+{{!
+
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+}}{{!
+
+  Creates the following methods for Thrift structs:
+  Get*, Set*, IsSet*, writeField*, readField*, String
+
+}}{{!
+
+  Get method.
+
+}}{{#struct:fields_sorted}}
+{{> types/field_method_get}}
+
+{{/struct:fields_sorted}}{{!
+
+  Set method.
+
+}}{{#struct:fields_sorted}}
+{{> types/field_method_set}}
+
+{{/struct:fields_sorted}}{{!
+
+  IsSet method.
+
+}}{{#struct:fields_sorted}}
+{{#field:nilable?}}
+{{> types/field_method_is_set}}
+
+{{/field:nilable?}}
+{{/struct:fields_sorted}}{{!
+
+  writeField method.
+
+}}{{^struct:use_reflect_codec?}}{{!
+}}{{#struct:fields_sorted}}
+{{> types/field_method_write}}
+
+{{/struct:fields_sorted}}{{!
+}}{{/struct:use_reflect_codec?}}{{!
+
+  readField method.
+
+}}{{^struct:use_reflect_codec?}}{{!
+}}{{#struct:fields_sorted}}
+{{> types/field_method_read}}
+
+{{/struct:fields_sorted}}{{!
+}}{{/struct:use_reflect_codec?}}{{!
+
+  DefaultGet method.
+
+}}{{#struct:fields_sorted}}
+{{#field:pointer?}}
+{{#program:gen_default_get?}}
+{{> types/field_method_default_get}}
+{{/program:gen_default_get?}}
+
+{{/field:pointer?}}
+{{/struct:fields_sorted}}{{!
+
+  countSetFields method.
+
+}}{{#struct:union?}}
+func (x *{{struct:go_name}}) countSetFields() int {
+    count := int(0)
+    {{#struct:fields_sorted}}
+    if (x.IsSet{{field:go_name}}()) {
+        count++
+    }
+    {{/struct:fields_sorted}}
+    return count
+}
+
+func (x *{{struct:go_name}}) CountSetFields{{struct:go_name}}() int {
+    return x.countSetFields()
+}
+
+{{/struct:union?}}

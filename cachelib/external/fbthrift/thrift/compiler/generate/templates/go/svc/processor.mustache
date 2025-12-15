@@ -1,0 +1,110 @@
+{{!
+
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+}}{{!
+
+  This tempalte defined the client type/functions for a thrift service.
+
+}}
+type {{service:go_name}}Processor struct {
+    {{#service:extends?}}
+    {{#service:extends}}
+    // Inherited/extended processor
+    *{{service:go_qualified_name}}Processor
+    {{/service:extends}}
+    {{/service:extends?}}
+    {{^service:extends?}}
+    processorFunctionMap map[string]thrift.ProcessorFunction
+    functionServiceMap   map[string]string
+    handler              {{service:go_name}}
+    {{/service:extends?}}
+}
+
+func New{{service:go_name}}Processor(handler {{service:go_name}}) *{{service:go_name}}Processor {
+    p := &{{service:go_name}}Processor{
+    {{#service:extends?}}
+    {{#service:extends}}
+        {{service:go_package_alias_prefix}}New{{service:go_name}}Processor(handler),
+    {{/service:extends}}
+    {{/service:extends?}}
+    {{^service:extends?}}
+        handler:              handler,
+        processorFunctionMap: make(map[string]thrift.ProcessorFunction),
+        functionServiceMap:   make(map[string]string),
+    {{/service:extends?}}
+    }
+    {{#service:functions}}
+    {{#function:go_server_supported?}}
+    p.AddToProcessorFunctionMap("{{> svc/func_rpc_name}}", &{{> svc/proc_func_name}}{handler: handler})
+    {{/function:go_server_supported?}}
+    {{/service:functions}}
+    {{#service:functions}}
+    {{#function:go_server_supported?}}
+    p.AddToFunctionServiceMap("{{> svc/func_rpc_name}}", "{{service:go_name}}")
+    {{/function:go_server_supported?}}
+    {{/service:functions}}
+
+    return p
+}
+{{^service:extends?}}
+
+func (p *{{service:go_name}}Processor) AddToProcessorFunctionMap(key string, processorFunction thrift.ProcessorFunction) {
+    p.processorFunctionMap[key] = processorFunction
+}
+
+func (p *{{service:go_name}}Processor) AddToFunctionServiceMap(key, service string) {
+    p.functionServiceMap[key] = service
+}
+
+func (p *{{service:go_name}}Processor) GetProcessorFunction(key string) (processor thrift.ProcessorFunction) {
+    return p.processorFunctionMap[key]
+}
+
+func (p *{{service:go_name}}Processor) ProcessorFunctionMap() map[string]thrift.ProcessorFunction {
+    return p.processorFunctionMap
+}
+
+func (p *{{service:go_name}}Processor) FunctionServiceMap() map[string]string {
+    return p.functionServiceMap
+}
+
+func (p *{{service:go_name}}Processor) PackageName() string {
+    return "{{program:go_pkg_name}}"
+}
+{{/service:extends?}}
+
+{{#program:gen_metadata?}}
+func (p *{{service:go_name}}Processor) GetThriftMetadata() *{{program:metadata_qualifier}}ThriftMetadata {
+    return GetThriftMetadataForService("{{service:scoped_name}}")
+}
+{{/program:gen_metadata?}}
+
+{{#service:functions}}
+{{#function:go_server_supported?}}
+
+{{> svc/processor_function}}
+
+{{/function:go_server_supported?}}
+{{/service:functions}}
+{{#service:interaction?}}
+
+func (p *{{service:go_name}}Processor) OnTermination() {
+    // If the underlying handler implements OnTermination()
+    if terminable, ok := p.handler.(thrift.Terminable); ok {
+        terminable.OnTermination()
+    }
+}
+{{/service:interaction?}}

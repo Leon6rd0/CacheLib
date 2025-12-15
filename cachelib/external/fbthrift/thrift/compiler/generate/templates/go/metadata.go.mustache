@@ -1,0 +1,202 @@
+{{!
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+}}{{!
+
+    NOTE:
+    Unfortunately map literals cannot be used to store metadata, due to a bug
+    in the Go compiler: https://github.com/golang/go/issues/33437
+    The bug results in a "NewBulk too big" compilation error for some very large schemas.
+    The workaround is to create slice literals (one with keys, one with values),
+    create an empty map during runtime and populate that map from the two slices.
+
+}}
+{{#import "common/constants" as constants}}
+{{> common/auto_generated_go}}
+
+package {{program:go_pkg_name}}
+
+import (
+    "maps"
+
+    {{#program:thrift_imports}}
+    {{program:go_package_alias}} "{{program:go_import_path}}"
+    {{/program:thrift_imports}}
+    thrift "{{constants.thrift_lib_import}}"
+    {{#program:import_metadata_package?}}
+    metadata "{{constants.thrift_metadata_import}}"
+    {{/program:import_metadata_package?}}
+)
+
+// (needed to ensure safety because of naive import list construction)
+{{> common/unused_imports_protection}}
+var _ = thrift.VOID
+var _ = maps.Copy[map[int]int, map[int]int]
+{{#program:import_metadata_package?}}
+var _ = metadata.GoUnusedProtection__
+{{/program:import_metadata_package?}}
+
+// Premade Thrift types
+var (
+    {{#program:thrift_metadata_types}}
+    {{type:metadata_name}} =
+        &{{program:metadata_qualifier}}ThriftType{
+            {{> metadata/thrift_type_setter}}:
+                {{> metadata/thrift_type_instance}}
+        }
+    {{/program:thrift_metadata_types}}
+)
+
+// Premade struct metadatas
+var (
+    {{#program:structs}}
+    {{#if struct:exception?}}
+    {{struct:struct_metadata_name}} =
+        {{> metadata/thrift_metadata_exception}}
+    {{#else}}
+    {{struct:struct_metadata_name}} =
+        {{> metadata/thrift_metadata_struct}}
+    {{/if struct:exception?}}
+    {{/program:structs}}
+)
+
+var premadeThriftTypesMap = func() map[string]*{{program:metadata_qualifier}}ThriftType {
+    fbthriftThriftTypesMap := make(map[string]*{{program:metadata_qualifier}}ThriftType)
+    {{#program:thrift_metadata_types}}
+    {{#type:named?}}
+    fbthriftThriftTypesMap["{{type:full_name}}"] = {{type:metadata_name}}
+    {{/type:named?}}
+    {{/program:thrift_metadata_types}}
+    return fbthriftThriftTypesMap
+}()
+
+var structMetadatas = func() []*{{program:metadata_qualifier}}ThriftStruct {
+    fbthriftResults := make([]*{{program:metadata_qualifier}}ThriftStruct, 0)
+    {{#program:structs}}
+    {{^struct:exception?}}
+    fbthriftResults = append(fbthriftResults, {{struct:struct_metadata_name}})
+    {{/struct:exception?}}
+    {{/program:structs}}
+    return fbthriftResults
+}()
+
+var exceptionMetadatas = func() []*{{program:metadata_qualifier}}ThriftException {
+    fbthriftResults := make([]*{{program:metadata_qualifier}}ThriftException, 0)
+    {{#program:structs}}
+    {{#struct:exception?}}
+    fbthriftResults = append(fbthriftResults, {{struct:struct_metadata_name}})
+    {{/struct:exception?}}
+    {{/program:structs}}
+    return fbthriftResults
+}()
+
+var enumMetadatas = func() []*{{program:metadata_qualifier}}ThriftEnum {
+    fbthriftResults := make([]*{{program:metadata_qualifier}}ThriftEnum, 0)
+    {{#program:enums}}
+    fbthriftResults = append(fbthriftResults,
+        {{> metadata/thrift_metadata_enum}}
+    )
+    {{/program:enums}}
+    return fbthriftResults
+}()
+
+var serviceMetadatas = func() []*{{program:metadata_qualifier}}ThriftService {
+    fbthriftResults := make([]*{{program:metadata_qualifier}}ThriftService, 0)
+    {{#program:services}}
+    fbthriftResults = append(fbthriftResults,
+        {{> metadata/thrift_metadata_service}}
+    )
+    {{/program:services}}
+    return fbthriftResults
+}()
+
+// Thrift metadata for this package, as well as all of its recursive imports.
+var packageThriftMetadata = func() *{{program:metadata_qualifier}}ThriftMetadata {
+    allEnumsMap := make(map[string]*{{program:metadata_qualifier}}ThriftEnum)
+    allStructsMap := make(map[string]*{{program:metadata_qualifier}}ThriftStruct)
+    allExceptionsMap := make(map[string]*{{program:metadata_qualifier}}ThriftException)
+    allServicesMap := make(map[string]*{{program:metadata_qualifier}}ThriftService)
+
+    // Add enum metadatas from the current program...
+    for _, enumMetadata := range enumMetadatas {
+        allEnumsMap[enumMetadata.GetName()] = enumMetadata
+    }
+    // Add struct metadatas from the current program...
+    for _, structMetadata := range structMetadatas {
+        allStructsMap[structMetadata.GetName()] = structMetadata
+    }
+    // Add exception metadatas from the current program...
+    for _, exceptionMetadata := range exceptionMetadatas {
+        allExceptionsMap[exceptionMetadata.GetName()] = exceptionMetadata
+    }
+    // Add service metadatas from the current program...
+    for _, serviceMetadata := range serviceMetadatas {
+        allServicesMap[serviceMetadata.GetName()] = serviceMetadata
+    }
+
+    // Obtain Thrift metadatas from recursively included programs...
+    var recursiveThriftMetadatas []*{{program:metadata_qualifier}}ThriftMetadata
+    {{#program:thrift_imports}}
+    recursiveThriftMetadatas = append(recursiveThriftMetadatas, {{program:go_package_alias}}.GetThriftMetadata())
+    {{/program:thrift_imports}}
+
+    // ...now merge metadatas from recursively included programs.
+    for _, thriftMetadata := range recursiveThriftMetadatas {
+        maps.Copy(allEnumsMap, thriftMetadata.GetEnums())
+        maps.Copy(allStructsMap, thriftMetadata.GetStructs())
+        maps.Copy(allExceptionsMap, thriftMetadata.GetExceptions())
+        maps.Copy(allServicesMap, thriftMetadata.GetServices())
+    }
+
+    return {{program:metadata_qualifier}}NewThriftMetadata().
+        SetEnums(allEnumsMap).
+        SetStructs(allStructsMap).
+        SetExceptions(allExceptionsMap).
+        SetServices(allServicesMap)
+}()
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *{{program:metadata_qualifier}}ThriftType {
+    return premadeThriftTypesMap[fullName]
+}
+
+// GetThriftMetadata returns complete Thrift metadata for current and imported packages.
+func GetThriftMetadata() *{{program:metadata_qualifier}}ThriftMetadata {
+    return packageThriftMetadata
+}
+
+// GetThriftMetadataForService returns Thrift metadata for the given service.
+func GetThriftMetadataForService(scopedServiceName string) *{{program:metadata_qualifier}}ThriftMetadata {
+    allServicesMap := packageThriftMetadata.GetServices()
+    relevantServicesMap := make(map[string]*{{program:metadata_qualifier}}ThriftService)
+
+    serviceMetadata := allServicesMap[scopedServiceName]
+    // Visit and record all recursive parents of the target service.
+    for serviceMetadata != nil {
+        relevantServicesMap[serviceMetadata.GetName()] = serviceMetadata
+        if serviceMetadata.IsSetParent() {
+            serviceMetadata = allServicesMap[serviceMetadata.GetParent()]
+        } else {
+            serviceMetadata = nil
+        }
+    }
+
+    return {{program:metadata_qualifier}}NewThriftMetadata().
+        SetEnums(packageThriftMetadata.GetEnums()).
+        SetStructs(packageThriftMetadata.GetStructs()).
+        SetExceptions(packageThriftMetadata.GetExceptions()).
+        SetServices(relevantServicesMap)
+}

@@ -1,0 +1,72 @@
+{{!
+
+  Copyright (c) Meta Platforms, Inc. and affiliates.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+
+}}{{!
+
+  This template generate a Thrift struct
+
+}}
+{{! type definition }}
+{{> types/struct_definition}}
+
+{{! new function }}
+{{> types/struct_method_new}}
+
+{{! methods }}
+{{> types/struct_methods}}
+
+{{#if (or struct:resp? struct:stream?)}}
+
+{{! exception }}
+{{> types/struct_method_exception}}
+{{/if (or struct:resp? struct:stream?)}}
+
+{{! write (serialize) }}
+{{#if struct:use_reflect_codec?}}
+{{> types/struct_method_write_v2}}
+{{#else}}
+{{> types/struct_method_write}}
+{{/if struct:use_reflect_codec?}}
+
+{{! read (deserialize) }}
+{{#if struct:use_reflect_codec?}}
+{{> types/struct_method_read_v2}}
+{{#else}}
+{{> types/struct_method_read}}
+{{/if struct:use_reflect_codec?}}
+
+{{! string }}
+{{> types/struct_method_string}}
+
+{{! setDefaults }}
+{{> types/struct_method_set_defaults}}
+{{#struct:use_reflect_codec?}}
+
+{{! getStructSpec }}
+{{> types/struct_method_get_spec}}
+{{/struct:use_reflect_codec?}}
+{{#program:gen_metadata?}}
+{{^struct:req_resp?}}
+
+{{! GetThrift(Struct|Exception)Metadata }}
+{{> types/struct_method_get_thrift_metadata}}
+{{/struct:req_resp?}}
+{{/program:gen_metadata?}}
+{{#struct:exception?}}
+
+{{! error }}
+{{> types/struct_method_error}}
+{{/struct:exception?}}

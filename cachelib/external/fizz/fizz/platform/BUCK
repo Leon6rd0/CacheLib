@@ -1,0 +1,38 @@
+load(
+    "@fbsource//tools/build_defs:default_platform_defs.bzl",
+    "ANDROID",
+    "get_default_target_platform",
+    "get_host_target_platform",
+)
+load("@fbsource//tools/build_defs:fb_native_wrapper.bzl", "fb_native")
+
+oncall("traffic_tls")
+
+deps = [x for x in [get_host_target_platform()] if x != None]
+
+fb_native.platform(
+    name = "fizz-mobile",
+    constraint_values = [
+        "fbsource//xplat/fizz/constraints:mnscrypto-only",
+    ],
+    visibility = ["PUBLIC"],
+    deps = [x for x in [get_host_target_platform()] if x != None],
+)
+
+fb_native.platform(
+    name = "fizz-mobile-android",
+    constraint_values = [
+        "fbsource//xplat/fizz/constraints:mnscrypto-only",
+    ],
+    visibility = ["PUBLIC"],
+    deps = [get_default_target_platform(ANDROID)],
+)
+
+fb_native.platform(
+    name = "fizz-mobile-keep-openssl",
+    constraint_values = [
+        "fbsource//xplat/fizz/constraints:fizzy-user-must-set-factory-explicitly",
+    ],
+    visibility = ["PUBLIC"],
+    deps = deps,
+)
