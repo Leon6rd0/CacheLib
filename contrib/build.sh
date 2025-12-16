@@ -24,6 +24,12 @@
 ## is closely controlled, an explicit 'shellcheck disable SC2086'
 ## was added to the relevant lines.
 
+OS="ubuntu"
+DIST="ubuntu"
+VER="22.04"
+function detect_os() {
+    return 0
+}
 set -u
 
 die()

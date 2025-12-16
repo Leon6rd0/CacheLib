@@ -13,36 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-sudo apt-get update
-sudo apt-get install -y \
-  build-essential \
-  git \
-  g++ \
-  cmake \
-  bison flex \
-  libboost-all-dev \
-  libevent-dev \
-  libdouble-conversion-dev \
-  libgoogle-glog-dev \
-  libgflags-dev \
-  libiberty-dev \
-  liblz4-dev \
-  liblzma-dev \
-  libbz2-dev \
-  libsnappy-dev \
-  make \
-  zlib1g-dev \
-  binutils-dev \
-  libjemalloc-dev \
-  libssl-dev \
-  pkg-config \
-  libunwind-dev \
-  libelf-dev \
-  libdwarf-dev \
-  libsodium-dev \
-  libaio-dev \
-  libnuma-dev
-
+return 0
 # NOTE:
 # GoogleTest/GoogleMock libraries are available in Ubuntu as
 # Standard packages, but the do not contain the required CMAKE
