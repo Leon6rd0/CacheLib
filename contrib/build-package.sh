@@ -302,7 +302,8 @@ export PATH
 ## Update the latest source code
 ##
 
-if test "$source" ; then
+#if test "$source" ; then
+if false; then
 
   if test "$external_git_clone" ; then
 
