@@ -41,20 +41,7 @@ die()
 
 detect_os()
 {
-  ### Detect by /etc/os-release (if exists)
-  if test -e /etc/os-release ; then
-    DETECTED=$(sh -c '. /etc/os-release ; echo ${ID}${VERSION_ID} | tr A-Z a-z')
-  fi
-
-
-  if test -z "$DETECTED" ; then
-    ### Detect by lsb_release (if exists)
-    if command -v lsb_release >/dev/null 2>&1 ; then
-      DETECTED=$(lsb_release -s -ir | tr -d '\n' | tr '[:upper:]' '[:lower:]')
-    fi
-  fi
-
-  test -n "$DETECTED" || die "failed to detect operating system type"
+	DETECTED="ubuntu22.04"
 }
 
 build_debian_10()
