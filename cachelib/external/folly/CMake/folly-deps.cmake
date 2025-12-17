@@ -34,7 +34,9 @@ else()
   set(FOLLY_BOOST_LINK_STATIC "${BOOST_LINK_STATIC}")
 endif()
 set(Boost_USE_STATIC_LIBS "${FOLLY_BOOST_LINK_STATIC}")
+list(APPEND CMAKE_MODULE_PATH "/usr/share/cmake-3.31/Modules")
 
+set(Boost_NO_BOOST_CMAKE ON)
 find_package(Boost 1.69.0 REQUIRED
   COMPONENTS
     context
