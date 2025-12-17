@@ -201,9 +201,9 @@ case "$1" in
     update_submodules=yes
     cmake_custom_params="-DBUILD_SHARED_LIBS=ON"
     if test "$build_tests" = "yes" ; then
-        cmake_custom_params="$cmake_custom_params -DBUILD_TESTS=ON"
+        cmake_custom_params="$cmake_custom_params -DBUILD_TESTS=ON -DBoost_NO_BOOST_CMAKE=ON"
     else
-        cmake_custom_params="$cmake_custom_params -DBUILD_TESTS=OFF"
+        cmake_custom_params="$cmake_custom_params -DBUILD_TESTS=OFF -DBoost_NO_BOOST_CMAKE=ON"
     fi
     ;;
 
