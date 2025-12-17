@@ -75,8 +75,8 @@ option(BUILD_SHARED_LIBS
 mark_as_advanced(BUILD_SHARED_LIBS)
 set(FOLLY_SUPPORT_SHARED_LIBRARY "${BUILD_SHARED_LIBS}")
 
-include(FBBuildOptions)
-fb_activate_static_library_option()
+#include(FBBuildOptions)
+#fb_activate_static_library_option()
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 20)
