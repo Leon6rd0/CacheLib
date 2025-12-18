@@ -97,9 +97,36 @@ list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
 message(STATUS ">> Manual Boost Configuration Applied Successfully <<")
 
 
-find_package(DoubleConversion MODULE REQUIRED)
+#find_package(DoubleConversion MODULE REQUIRED)
+#list(APPEND FOLLY_LINK_LIBRARIES ${DOUBLE_CONVERSION_LIBRARY})
+#list(APPEND FOLLY_INCLUDE_DIRECTORIES ${DOUBLE_CONVERSION_INCLUDE_DIR})
+
+# ==========================================================
+# 🚀 手动配置 Double Conversion (Buildroot 专用)
+# ==========================================================
+message(STATUS ">> BYPASSING FindDoubleConversion: Forcing Manual Configuration <<")
+
+set(DOUBLE_CONVERSION_FOUND TRUE)
+# Buildroot 通常把头文件放在 /usr/include/double-conversion
+# 但源码引用通常是 <double-conversion/xxx.h>，所以 include 路径设为 /usr/include
+set(DOUBLE_CONVERSION_INCLUDE_DIR "/usr/include")
+set(DOUBLE_CONVERSION_LIBRARY "/usr/lib/libdouble-conversion.so")
+
+# 创建 Folly 可能需要的导入目标 (以防万一)
+if(NOT TARGET double-conversion::double-conversion)
+  add_library(double-conversion::double-conversion UNKNOWN IMPORTED)
+  set_target_properties(double-conversion::double-conversion PROPERTIES
+    IMPORTED_LOCATION "${DOUBLE_CONVERSION_LIBRARY}"
+    INTERFACE_INCLUDE_DIRECTORIES "${DOUBLE_CONVERSION_INCLUDE_DIR}"
+  )
+endif()
+
+# 填充 Folly 变量
 list(APPEND FOLLY_LINK_LIBRARIES ${DOUBLE_CONVERSION_LIBRARY})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${DOUBLE_CONVERSION_INCLUDE_DIR})
+
+message(STATUS ">> Manual DoubleConversion Configuration Applied <<")
+# ==========================================================
 
 find_package(FastFloat MODULE REQUIRED)
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${FASTFLOAT_INCLUDE_DIR})
