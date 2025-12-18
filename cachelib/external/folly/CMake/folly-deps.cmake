@@ -34,19 +34,68 @@ else()
   set(FOLLY_BOOST_LINK_STATIC "${BOOST_LINK_STATIC}")
 endif()
 set(Boost_USE_STATIC_LIBS "${FOLLY_BOOST_LINK_STATIC}")
-list(APPEND CMAKE_MODULE_PATH "/usr/share/cmake-3.31/Modules")
+##find Boost cannot use in newer CMake like Cmake3.31 
+##
+#list(APPEND CMAKE_MODULE_PATH "/usr/share/cmake-3.31/Modules")
 
-set(Boost_NO_BOOST_CMAKE ON)
-find_package(Boost 1.69.0 REQUIRED
-  COMPONENTS
-    context
-    filesystem
-    program_options
-    regex
-    thread
+#set(Boost_NO_BOOST_CMAKE ON)
+#find_package(Boost 1.69.0 REQUIRED
+#  COMPONENTS
+#    context
+#    filesystem
+#    program_options
+#    regex
+#    thread
+#)
+#list(APPEND FOLLY_LINK_LIBRARIES ${Boost_LIBRARIES})
+#list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
+
+message(STATUS ">> BYPASSING FindBoost: Forcing Manual Boost Configuration <<")
+
+set(Boost_FOUND TRUE)
+set(Boost_INCLUDE_DIRS "/usr/include")
+set(BOOST_LIBRARYDIR   "/usr/lib")
+
+# 定义一个宏，用来“伪造”Boost目标
+macro(manual_boost_target name libname)
+    if(NOT TARGET Boost::${name})
+        add_library(Boost::${name} UNKNOWN IMPORTED)
+        set_target_properties(Boost::${name} PROPERTIES
+            IMPORTED_LOCATION "${BOOST_LIBRARYDIR}/libboost_${libname}.so"
+            INTERFACE_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
+        )
+    endif()
+endmacro()
+
+# 手动创建所有 Folly 可能用到的 Boost 组件
+# 注意：即使 Folly 原本没列出这么多，多写几个不报错，防止隐式依赖
+manual_boost_target(context          context)
+manual_boost_target(filesystem       filesystem)
+manual_boost_target(program_options  program_options)
+manual_boost_target(regex            regex)
+manual_boost_target(system           system)
+manual_boost_target(thread           thread)
+manual_boost_target(atomic           atomic)
+manual_boost_target(chrono           chrono)
+
+# 汇总变量 (Folly 的 CMakeLists.txt 需要用到这几个变量)
+set(Boost_LIBRARIES
+    Boost::context
+    Boost::filesystem
+    Boost::program_options
+    Boost::regex
+    Boost::system
+    Boost::thread
+    Boost::atomic
+    Boost::chrono
 )
+
+# 手动将它们链接到 Folly (替代原本的 list APPEND)
 list(APPEND FOLLY_LINK_LIBRARIES ${Boost_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
+
+message(STATUS ">> Manual Boost Configuration Applied Successfully <<")
+
 
 find_package(DoubleConversion MODULE REQUIRED)
 list(APPEND FOLLY_LINK_LIBRARIES ${DOUBLE_CONVERSION_LIBRARY})
