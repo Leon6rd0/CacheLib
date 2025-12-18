@@ -133,6 +133,11 @@ message(STATUS ">> Manual DoubleConversion Configuration Applied <<")
 # 🚀 最终适配版：Folly 手动配置 (Based on user's ls output)
 # ==============================================================================
 
+# 定义你的安装目录 (根据日志修改)
+set(OPT_DIR "/root/CacheLib/opt/cachelib")
+set(OPT_LIB "${OPT_DIR}/lib64")  # 注意：日志显示是 lib64
+set(OPT_INC "${OPT_DIR}/include")
+
 # 定义系统路径变量，方便统一修改
 set(SYS_INC "/usr/include")
 set(SYS_LIB "/usr/lib")
@@ -159,26 +164,66 @@ endif()
 message(STATUS ">> Manual: Gflags <<")
 set(LIBGFLAGS_FOUND TRUE)
 set(FOLLY_HAVE_LIBGFLAGS TRUE)
-set(LIBGFLAGS_LIBRARY "${SYS_LIB}/libgflags.so")
-set(LIBGFLAGS_INCLUDE_DIR "${SYS_INC}")
+# 优先找 opt，找不到找系统
+if(EXISTS "${OPT_LIB}/libgflags.so")
+    set(LIBGFLAGS_LIBRARY "${OPT_LIB}/libgflags.so")
+    set(LIBGFLAGS_INCLUDE_DIR "${OPT_INC}")
+else()
+    set(LIBGFLAGS_LIBRARY "${SYS_LIB}/libgflags.so")
+    set(LIBGFLAGS_INCLUDE_DIR "${SYS_INC}")
+endif()
 
 list(APPEND FOLLY_LINK_LIBRARIES ${LIBGFLAGS_LIBRARY})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBGFLAGS_INCLUDE_DIR})
 set(FOLLY_LIBGFLAGS_LIBRARY ${LIBGFLAGS_LIBRARY})
 set(FOLLY_LIBGFLAGS_INCLUDE ${LIBGFLAGS_INCLUDE_DIR})
-
 # --------------------------------------------------------
 # 3. Glog (已确认存在)
 # --------------------------------------------------------
 message(STATUS ">> Manual: Glog <<")
 set(GLOG_FOUND TRUE)
 set(FOLLY_HAVE_LIBGLOG TRUE)
-set(GLOG_LIBRARY "${SYS_LIB}/libglog.so")
-set(GLOG_INCLUDE_DIR "${SYS_INC}")
+
+if(EXISTS "${OPT_LIB}/libglog.so")
+    set(GLOG_LIBRARY "${OPT_LIB}/libglog.so")
+    set(GLOG_INCLUDE_DIR "${OPT_INC}")
+else()
+    set(GLOG_LIBRARY "${SYS_LIB}/libglog.so")
+    set(GLOG_INCLUDE_DIR "${SYS_INC}")
+endif()
 
 list(APPEND FOLLY_LINK_LIBRARIES ${GLOG_LIBRARY})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${GLOG_INCLUDE_DIR})
 
+# --------------------------------------------------------
+# 4. fmt (在 opt 中 - 关键修正!)
+# --------------------------------------------------------
+message(STATUS ">> Manual: fmt <<")
+
+if(EXISTS "${OPT_LIB}/libfmt.so")
+    set(FMT_LIB_PATH "${OPT_LIB}/libfmt.so")
+    set(FMT_INC_PATH "${OPT_INC}")
+else()
+    set(FMT_LIB_PATH "${SYS_LIB}/libfmt.so")
+    set(FMT_INC_PATH "${SYS_INC}")
+endif()
+
+if(NOT TARGET fmt::fmt)
+    add_library(fmt::fmt UNKNOWN IMPORTED)
+    set_target_properties(fmt::fmt PROPERTIES
+        IMPORTED_LOCATION "${FMT_LIB_PATH}"
+        INTERFACE_INCLUDE_DIRECTORIES "${FMT_INC_PATH}"
+    )
+endif()
+# --------------------------------------------------------
+# 5. Zstd (在 opt 中)
+# --------------------------------------------------------
+message(STATUS ">> Manual: Zstd <<")
+if(EXISTS "${OPT_LIB}/libzstd.so")
+    set(FOLLY_HAVE_LIBZSTD TRUE)
+    list(APPEND FOLLY_INCLUDE_DIRECTORIES "${OPT_INC}")
+    list(APPEND FOLLY_LINK_LIBRARIES "${OPT_LIB}/libzstd.so")
+endif()
 # --------------------------------------------------------
 # 4. LibEvent (已确认存在)
 # --------------------------------------------------------
@@ -201,7 +246,37 @@ set(ZLIB_INCLUDE_DIRS "${SYS_INC}")
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${ZLIB_INCLUDE_DIRS})
 list(APPEND FOLLY_LINK_LIBRARIES ${ZLIB_LIBRARIES})
 list(APPEND CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARIES})
+# --------------------------------------------------------
+# 8. Boost (我们在 Buildroot 里，通常在 /usr/lib)
+# --------------------------------------------------------
+message(STATUS ">> Manual: Boost (System) <<")
+set(Boost_FOUND TRUE)
+set(Boost_INCLUDE_DIRS "${SYS_INC}")
+set(BOOST_LIBRARYDIR   "${SYS_LIB}")
 
+macro(manual_boost_target name libname)
+    if(NOT TARGET Boost::${name})
+        add_library(Boost::${name} UNKNOWN IMPORTED)
+        set_target_properties(Boost::${name} PROPERTIES
+            IMPORTED_LOCATION "${BOOST_LIBRARYDIR}/libboost_${libname}.so"
+            INTERFACE_INCLUDE_DIRECTORIES "${Boost_INCLUDE_DIRS}"
+        )
+    endif()
+endmacro()
+
+manual_boost_target(context          context)
+manual_boost_target(filesystem       filesystem)
+manual_boost_target(program_options  program_options)
+manual_boost_target(regex            regex)
+manual_boost_target(system           system)
+manual_boost_target(thread           thread)
+manual_boost_target(atomic           atomic)
+manual_boost_target(chrono           chrono)
+
+set(Boost_LIBRARIES Boost::context Boost::filesystem Boost::program_options Boost::regex Boost::system Boost::thread Boost::atomic Boost::chrono)
+
+list(APPEND FOLLY_LINK_LIBRARIES ${Boost_LIBRARIES})
+list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
 # --------------------------------------------------------
 # 6. OpenSSL (已确认存在)
 # --------------------------------------------------------
@@ -276,4 +351,20 @@ if(NOT FOLLY_CPP_ATOMIC_BUILTIN)
 endif()
 
 message(STATUS ">> Manual Config Complete. Good luck! <<")
-# ==============================================================================
+# ==========================================================
+# 12. 重建 folly_deps 目标 (关键！)
+# ==========================================================
+message(STATUS ">> Manual: Recreating folly_deps target <<")
+
+add_library(folly_deps INTERFACE)
+target_link_libraries(folly_deps INTERFACE fmt::fmt)
+target_link_libraries(folly_deps INTERFACE ${FOLLY_LINK_LIBRARIES})
+
+list(REMOVE_DUPLICATES FOLLY_INCLUDE_DIRECTORIES)
+target_include_directories(folly_deps INTERFACE ${FOLLY_INCLUDE_DIRECTORIES})
+
+if(FOLLY_ASAN_FLAGS)
+    target_link_libraries(folly_deps INTERFACE ${FOLLY_ASAN_FLAGS})
+endif()
+
+message(STATUS ">> folly_deps Configured. Ready to build! <<")
