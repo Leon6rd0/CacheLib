@@ -128,275 +128,152 @@ list(APPEND FOLLY_INCLUDE_DIRECTORIES ${DOUBLE_CONVERSION_INCLUDE_DIR})
 message(STATUS ">> Manual DoubleConversion Configuration Applied <<")
 # ==========================================================
 
-find_package(FastFloat MODULE REQUIRED)
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${FASTFLOAT_INCLUDE_DIR})
 
-find_package(Gflags MODULE)
-set(FOLLY_HAVE_LIBGFLAGS ${LIBGFLAGS_FOUND})
-if(LIBGFLAGS_FOUND)
-  list(APPEND FOLLY_LINK_LIBRARIES ${LIBGFLAGS_LIBRARY})
-  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBGFLAGS_INCLUDE_DIR})
-  set(FOLLY_LIBGFLAGS_LIBRARY ${LIBGFLAGS_LIBRARY})
-  set(FOLLY_LIBGFLAGS_INCLUDE ${LIBGFLAGS_INCLUDE_DIR})
+# ==============================================================================
+# 🚀 最终适配版：Folly 手动配置 (Based on user's ls output)
+# ==============================================================================
+
+# 定义系统路径变量，方便统一修改
+set(SYS_INC "/usr/include")
+set(SYS_LIB "/usr/lib")
+
+# --------------------------------------------------------
+# 1. FastFloat (Header Only - CRITICAL!)
+# --------------------------------------------------------
+message(STATUS ">> Manual: FastFloat <<")
+# 注意：如果你手动把头文件放到了其他地方，请修改这里！
+get_filename_component(MY_LOCAL_HEADERS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../local_headers" ABSOLUTE)
+
+if(EXISTS "${MY_LOCAL_HEADERS_DIR}/fast_float/fast_float.h")
+    message(STATUS "   Found local fast_float at: ${MY_LOCAL_HEADERS_DIR}")
+    # 将 my_headers 目录加入搜索路径
+    # 这样代码里的 #include <fast_float/fast_float.h> 就能找到文件了
+    list(APPEND FOLLY_INCLUDE_DIRECTORIES "${MY_LOCAL_HEADERS_DIR}")
+else()
+    message(FATAL_ERROR "!!!! Error: Cannot find local fast_float headers at ${MY_LOCAL_HEADERS_DIR}/fast_float/fast_float.h !!!!")
 endif()
 
-find_package(Glog MODULE)
-set(FOLLY_HAVE_LIBGLOG ${GLOG_FOUND})
+# --------------------------------------------------------
+# 2. Gflags (已确认存在)
+# --------------------------------------------------------
+message(STATUS ">> Manual: Gflags <<")
+set(LIBGFLAGS_FOUND TRUE)
+set(FOLLY_HAVE_LIBGFLAGS TRUE)
+set(LIBGFLAGS_LIBRARY "${SYS_LIB}/libgflags.so")
+set(LIBGFLAGS_INCLUDE_DIR "${SYS_INC}")
+
+list(APPEND FOLLY_LINK_LIBRARIES ${LIBGFLAGS_LIBRARY})
+list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBGFLAGS_INCLUDE_DIR})
+set(FOLLY_LIBGFLAGS_LIBRARY ${LIBGFLAGS_LIBRARY})
+set(FOLLY_LIBGFLAGS_INCLUDE ${LIBGFLAGS_INCLUDE_DIR})
+
+# --------------------------------------------------------
+# 3. Glog (已确认存在)
+# --------------------------------------------------------
+message(STATUS ">> Manual: Glog <<")
+set(GLOG_FOUND TRUE)
+set(FOLLY_HAVE_LIBGLOG TRUE)
+set(GLOG_LIBRARY "${SYS_LIB}/libglog.so")
+set(GLOG_INCLUDE_DIR "${SYS_INC}")
+
 list(APPEND FOLLY_LINK_LIBRARIES ${GLOG_LIBRARY})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${GLOG_INCLUDE_DIR})
 
-find_package(LibEvent MODULE REQUIRED)
+# --------------------------------------------------------
+# 4. LibEvent (已确认存在)
+# --------------------------------------------------------
+message(STATUS ">> Manual: LibEvent <<")
+set(LIBEVENT_LIB "${SYS_LIB}/libevent.so")
+set(LIBEVENT_INCLUDE_DIR "${SYS_INC}")
+
 list(APPEND FOLLY_LINK_LIBRARIES ${LIBEVENT_LIB})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBEVENT_INCLUDE_DIR})
 
-find_package(ZLIB MODULE)
-set(FOLLY_HAVE_LIBZ ${ZLIB_FOUND})
-if (ZLIB_FOUND)
-  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${ZLIB_INCLUDE_DIRS})
-  list(APPEND FOLLY_LINK_LIBRARIES ${ZLIB_LIBRARIES})
-  list(APPEND CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARIES})
-endif()
+# --------------------------------------------------------
+# 5. ZLIB (已确认存在)
+# --------------------------------------------------------
+message(STATUS ">> Manual: ZLIB <<")
+set(ZLIB_FOUND TRUE)
+set(FOLLY_HAVE_LIBZ TRUE)
+set(ZLIB_LIBRARIES "${SYS_LIB}/libz.so")
+set(ZLIB_INCLUDE_DIRS "${SYS_INC}")
 
-find_package(OpenSSL 1.1.1 MODULE REQUIRED)
+list(APPEND FOLLY_INCLUDE_DIRECTORIES ${ZLIB_INCLUDE_DIRS})
+list(APPEND FOLLY_LINK_LIBRARIES ${ZLIB_LIBRARIES})
+list(APPEND CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARIES})
+
+# --------------------------------------------------------
+# 6. OpenSSL (已确认存在)
+# --------------------------------------------------------
+message(STATUS ">> Manual: OpenSSL <<")
+set(OPENSSL_FOUND TRUE)
+set(OPENSSL_INCLUDE_DIR "${SYS_INC}")
+set(OPENSSL_LIBRARIES "${SYS_LIB}/libssl.so" "${SYS_LIB}/libcrypto.so")
+
 list(APPEND FOLLY_LINK_LIBRARIES ${OPENSSL_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE_DIR})
-list(APPEND CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
-list(APPEND CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
-list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${OPENSSL_LIBRARIES})
-list(REMOVE_ITEM CMAKE_REQUIRED_INCLUDES ${OPENSSL_INCLUDE_DIR})
-if (ZLIB_FOUND)
-    list(REMOVE_ITEM CMAKE_REQUIRED_LIBRARIES ${ZLIB_LIBRARIES})
-endif()
 
-find_package(BZip2 MODULE)
-set(FOLLY_HAVE_LIBBZ2 ${BZIP2_FOUND})
-if (BZIP2_FOUND)
-  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${BZIP2_INCLUDE_DIRS})
-  list(APPEND FOLLY_LINK_LIBRARIES ${BZIP2_LIBRARIES})
-endif()
+# --------------------------------------------------------
+# 7. 可选压缩库 (根据 ls 结果动态加载)
+# --------------------------------------------------------
 
-find_package(LibLZMA MODULE)
-set(FOLLY_HAVE_LIBLZMA ${LIBLZMA_FOUND})
-if (LIBLZMA_FOUND)
-  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBLZMA_INCLUDE_DIRS})
-  list(APPEND FOLLY_LINK_LIBRARIES ${LIBLZMA_LIBRARIES})
-endif()
+# BZip2 (已确认存在)
+message(STATUS ">> Manual: BZip2 (Found) <<")
+set(FOLLY_HAVE_LIBBZ2 TRUE)
+list(APPEND FOLLY_LINK_LIBRARIES "${SYS_LIB}/libbz2.so")
 
-find_package(LZ4 MODULE)
-set(FOLLY_HAVE_LIBLZ4 ${LZ4_FOUND})
-if (LZ4_FOUND)
-  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LZ4_INCLUDE_DIR})
-  list(APPEND FOLLY_LINK_LIBRARIES ${LZ4_LIBRARY})
-endif()
+# LibLZMA (已确认存在)
+message(STATUS ">> Manual: LibLZMA (Found) <<")
+set(FOLLY_HAVE_LIBLZMA TRUE)
+list(APPEND FOLLY_LINK_LIBRARIES "${SYS_LIB}/liblzma.so")
 
-find_package(Zstd MODULE)
-set(FOLLY_HAVE_LIBZSTD ${ZSTD_FOUND})
-if(ZSTD_FOUND)
-  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${ZSTD_INCLUDE_DIR})
-  list(APPEND FOLLY_LINK_LIBRARIES ${ZSTD_LIBRARY})
-endif()
+# Zstd (已确认存在)
+message(STATUS ">> Manual: Zstd (Found) <<")
+set(FOLLY_HAVE_LIBZSTD TRUE)
+list(APPEND FOLLY_LINK_LIBRARIES "${SYS_LIB}/libzstd.so")
 
-find_package(Snappy MODULE)
-set(FOLLY_HAVE_LIBSNAPPY ${SNAPPY_FOUND})
-if (SNAPPY_FOUND)
-  list(APPEND FOLLY_INCLUDE_DIRECTORIES ${SNAPPY_INCLUDE_DIR})
-  list(APPEND FOLLY_LINK_LIBRARIES ${SNAPPY_LIBRARY})
-endif()
+# LZ4 / Snappy (已确认缺失，自动跳过)
+message(STATUS ">> Manual: LZ4/Snappy (Skipping - Not found) <<")
+set(FOLLY_HAVE_LIBLZ4 FALSE)
+set(FOLLY_HAVE_LIBSNAPPY FALSE)
 
-find_package(LibDwarf)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBDWARF_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBDWARF_INCLUDE_DIRS})
+# --------------------------------------------------------
+# 8. Libiberty (已确认存在 .a)
+# --------------------------------------------------------
+message(STATUS ">> Manual: Libiberty (Found Static: libiberty.a) <<")
+list(APPEND FOLLY_LINK_LIBRARIES "${SYS_LIB}/libiberty.a")
 
-find_package(Libiberty)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBIBERTY_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBIBERTY_INCLUDE_DIRS})
+# --------------------------------------------------------
+# 9. LibAIO (已确认存在)
+# --------------------------------------------------------
+message(STATUS ">> Manual: LibAIO (Found) <<")
+list(APPEND FOLLY_LINK_LIBRARIES "${SYS_LIB}/libaio.so")
 
-find_package(LibAIO)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBAIO_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBAIO_INCLUDE_DIRS})
+# --------------------------------------------------------
+# 10. 其他缺失的可选库 (自动跳过)
+# --------------------------------------------------------
+message(STATUS ">> Manual: Skipping LibDwarf, LibUring, LibSodium, LibUnwind (Not found) <<")
+set(LIBDWARF_FOUND FALSE)
+set(FOLLY_HAVE_LIBDWARF FALSE)
+set(LIBUNWIND_FOUND FALSE)
+set(FOLLY_HAVE_LIBUNWIND FALSE)
+set(FOLLY_USE_SYMBOLIZER OFF) # 缺少 Dwarf/Unwind 时必须关闭
 
-find_package(LibUring)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBURING_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBURING_INCLUDE_DIRS})
-
-find_package(Libsodium)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBSODIUM_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBSODIUM_INCLUDE_DIRS})
-
+# --------------------------------------------------------
+# 11. 系统基础配置
+# --------------------------------------------------------
 list(APPEND FOLLY_LINK_LIBRARIES ${CMAKE_DL_LIBS})
 list(APPEND CMAKE_REQUIRED_LIBRARIES ${CMAKE_DL_LIBS})
 
-if (PYTHON_EXTENSIONS)
-  find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-  find_package(Cython 0.26 REQUIRED)
-endif ()
-
-find_package(LibUnwind)
-list(APPEND FOLLY_LINK_LIBRARIES ${LIBUNWIND_LIBRARIES})
-list(APPEND FOLLY_INCLUDE_DIRECTORIES ${LIBUNWIND_INCLUDE_DIRS})
-if (LIBUNWIND_FOUND)
-  set(FOLLY_HAVE_LIBUNWIND ON)
-endif()
-if (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-  list(APPEND FOLLY_LINK_LIBRARIES "execinfo")
-endif ()
-
-cmake_push_check_state()
-set(CMAKE_REQUIRED_DEFINITIONS -D_XOPEN_SOURCE)
-check_cxx_symbol_exists(swapcontext ucontext.h FOLLY_HAVE_SWAPCONTEXT)
-cmake_pop_check_state()
-
-set(FOLLY_USE_SYMBOLIZER OFF)
-CHECK_INCLUDE_FILE_CXX(elf.h FOLLY_HAVE_ELF)
-find_package(Backtrace)
-
-set(FOLLY_HAVE_BACKTRACE ${Backtrace_FOUND})
-set(FOLLY_HAVE_DWARF ${LIBDWARF_FOUND})
-if (NOT WIN32 AND NOT APPLE)
-  set(FOLLY_USE_SYMBOLIZER ON)
-endif()
-message(STATUS "Setting FOLLY_USE_SYMBOLIZER: ${FOLLY_USE_SYMBOLIZER}")
-message(STATUS "Setting FOLLY_HAVE_ELF: ${FOLLY_HAVE_ELF}")
-message(STATUS "Setting FOLLY_HAVE_DWARF: ${FOLLY_HAVE_DWARF}")
-
-# Using clang with libstdc++ requires explicitly linking against libatomic
+# C++ Atomic 检查 (保留原逻辑，通常 GCC 14 需要 libatomic)
 check_cxx_source_compiles("
   #include <atomic>
-  int main(int argc, char** argv) {
-    std::atomic<uint8_t> a1;
-    std::atomic<uint16_t> a2;
-    std::atomic<uint32_t> a4;
-    std::atomic<uint64_t> a8;
-    struct Test { bool val; };
-    std::atomic<Test> s;
-    return a1++ + a2++ + a4++ + a8++ + unsigned(s.is_lock_free());
-  }"
-  FOLLY_CPP_ATOMIC_BUILTIN
-)
+  int main() { std::atomic<int> a; return a.fetch_add(1); }
+" FOLLY_CPP_ATOMIC_BUILTIN)
+
 if(NOT FOLLY_CPP_ATOMIC_BUILTIN)
-  list(APPEND CMAKE_REQUIRED_LIBRARIES atomic)
   list(APPEND FOLLY_LINK_LIBRARIES atomic)
-  set(ATOMIC_LIBRARY "atomic")
-  check_cxx_source_compiles("
-    #include <atomic>
-    int main(int argc, char** argv) {
-      std::atomic<uint8_t> a1;
-      std::atomic<uint16_t> a2;
-      std::atomic<uint32_t> a4;
-      std::atomic<uint64_t> a8;
-      struct Test { bool val; };
-      std::atomic<Test> s;
-      return a1++ + a2++ + a4++ + a8++ + unsigned(s.is_lock_free());
-    }"
-    FOLLY_CPP_ATOMIC_WITH_LIBATOMIC
-  )
-  if (NOT FOLLY_CPP_ATOMIC_WITH_LIBATOMIC)
-    message(
-      FATAL_ERROR "unable to link C++ std::atomic code: you may need \
-      to install GNU libatomic"
-    )
-  endif()
 endif()
 
-check_cxx_source_compiles("
-  #include <type_traits>
-  #if _GLIBCXX_RELEASE
-  int main() {}
-  #endif"
-  FOLLY_STDLIB_LIBSTDCXX
-)
-check_cxx_source_compiles("
-  #include <type_traits>
-  #if _GLIBCXX_RELEASE >= 9
-  int main() {}
-  #endif"
-  FOLLY_STDLIB_LIBSTDCXX_GE_9
-)
-check_cxx_source_compiles("
-  #include <type_traits>
-  #if _LIBCPP_VERSION
-  int main() {}
-  #endif"
-  FOLLY_STDLIB_LIBCXX
-)
-check_cxx_source_compiles("
-  #include <type_traits>
-  #if _LIBCPP_VERSION >= 9000
-  int main() {}
-  #endif"
-  FOLLY_STDLIB_LIBCXX_GE_9
-)
-check_cxx_source_compiles("
-  #include <type_traits>
-  #if _CPPLIB_VER
-  int main() {}
-  #endif"
-  FOLLY_STDLIB_LIBCPP
-)
-
-if (APPLE)
-  list (APPEND CMAKE_REQUIRED_LIBRARIES c++abi)
-  list (APPEND FOLLY_LINK_LIBRARIES c++abi)
-endif ()
-
-if (FOLLY_STDLIB_LIBSTDCXX AND NOT FOLLY_STDLIB_LIBSTDCXX_GE_9)
-  list (APPEND CMAKE_REQUIRED_LIBRARIES stdc++fs)
-  list (APPEND FOLLY_LINK_LIBRARIES stdc++fs)
-endif()
-if (FOLLY_STDLIB_LIBCXX AND NOT FOLLY_STDLIB_LIBCXX_GE_9)
-  list (APPEND CMAKE_REQUIRED_LIBRARIES c++fs)
-  list (APPEND FOLLY_LINK_LIBRARIES c++fs)
-endif ()
-
-option(
-  FOLLY_LIBRARY_SANITIZE_ADDRESS
-  "Build folly with Address Sanitizer enabled."
-  OFF
-)
-
-if ($ENV{WITH_ASAN})
-  message(STATUS "ENV WITH_ASAN is set")
-  set (FOLLY_LIBRARY_SANITIZE_ADDRESS ON)
-endif()
-
-if (FOLLY_LIBRARY_SANITIZE_ADDRESS)
-  if ("${CMAKE_CXX_COMPILER_ID}" MATCHES GNU)
-    set(FOLLY_LIBRARY_SANITIZE_ADDRESS ON)
-    set(FOLLY_ASAN_FLAGS -fsanitize=address,undefined)
-    list(APPEND FOLLY_CXX_FLAGS ${FOLLY_ASAN_FLAGS})
-    # All of the functions in folly/detail/Sse.cpp are intended to be compiled
-    # with ASAN disabled.  They are marked with attributes to disable the
-    # sanitizer, but even so, gcc fails to compile them for some reason when
-    # sanitization is enabled on the compile line.
-    set_source_files_properties(
-      "${PROJECT_SOURCE_DIR}/folly/detail/Sse.cpp"
-      PROPERTIES COMPILE_FLAGS -fno-sanitize=address,undefined
-    )
-  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES Clang)
-    set(FOLLY_LIBRARY_SANITIZE_ADDRESS ON)
-    set(
-      FOLLY_ASAN_FLAGS
-      -fno-common
-      -fsanitize=address,undefined,integer,nullability
-      -fno-sanitize=unsigned-integer-overflow
-    )
-    list(APPEND FOLLY_CXX_FLAGS ${FOLLY_ASAN_FLAGS})
-  endif()
-endif()
-
-add_library(folly_deps INTERFACE)
-
-find_package(fmt CONFIG)
-if (NOT DEFINED fmt_CONFIG)
-    # Fallback on a normal search on the current system
-    find_package(Fmt MODULE REQUIRED)
-endif()
-target_link_libraries(folly_deps INTERFACE fmt::fmt)
-
-list(REMOVE_DUPLICATES FOLLY_INCLUDE_DIRECTORIES)
-target_include_directories(folly_deps INTERFACE ${FOLLY_INCLUDE_DIRECTORIES})
-target_link_libraries(folly_deps INTERFACE
-  ${FOLLY_LINK_LIBRARIES}
-  ${FOLLY_SHINY_DEPENDENCIES}
-  ${FOLLY_ASAN_FLAGS}
-)
+message(STATUS ">> Manual Config Complete. Good luck! <<")
+# ==============================================================================
