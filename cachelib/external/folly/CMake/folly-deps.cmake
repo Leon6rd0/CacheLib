@@ -264,7 +264,7 @@ macro(manual_boost_target name libname)
     endif()
 endmacro()
 
-manual_boost_target(context          context)
+#manual_boost_target(context          context)
 manual_boost_target(filesystem       filesystem)
 manual_boost_target(program_options  program_options)
 manual_boost_target(regex            regex)
