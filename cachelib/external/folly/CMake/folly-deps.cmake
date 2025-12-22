@@ -273,7 +273,7 @@ manual_boost_target(thread           thread)
 manual_boost_target(atomic           atomic)
 manual_boost_target(chrono           chrono)
 
-set(Boost_LIBRARIES Boost::context Boost::filesystem Boost::program_options Boost::regex Boost::system Boost::thread Boost::atomic Boost::chrono)
+set(Boost_LIBRARIES Boost::filesystem Boost::program_options Boost::regex Boost::system Boost::thread Boost::atomic Boost::chrono)
 
 list(APPEND FOLLY_LINK_LIBRARIES ${Boost_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
