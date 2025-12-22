@@ -18,6 +18,10 @@ include(CheckIncludeFileCXX)
 include(CheckFunctionExists)
 include(CMakePushCheckState)
 
+add_compile_definitions(FOLLY_USE_BOOST_CONTEXT=0)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFOLLY_USE_BOOST_CONTEXT=0")
+
 set(
   BOOST_LINK_STATIC "auto"
   CACHE STRING
