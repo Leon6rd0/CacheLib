@@ -69,7 +69,7 @@ endmacro()
 
 # 手动创建所有 Folly 可能用到的 Boost 组件
 # 注意：即使 Folly 原本没列出这么多，多写几个不报错，防止隐式依赖
-manual_boost_target(context          context)
+# manual_boost_target(context          context)
 manual_boost_target(filesystem       filesystem)
 manual_boost_target(program_options  program_options)
 manual_boost_target(regex            regex)
@@ -80,7 +80,7 @@ manual_boost_target(chrono           chrono)
 
 # 汇总变量 (Folly 的 CMakeLists.txt 需要用到这几个变量)
 set(Boost_LIBRARIES
-    Boost::context
+    # Boost::context
     Boost::filesystem
     Boost::program_options
     Boost::regex
