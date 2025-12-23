@@ -30,8 +30,8 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/../build/fbcode_builder/CMake"
   ${CMAKE_MODULE_PATH})
 
-include(FBBuildOptions)
-fb_activate_static_library_option()
+#include(FBBuildOptions)
+#fb_activate_static_library_option()
 
 # When installing Folly & Fizz in a non-default prefix, this will let
 # projects linking against libfizz.so to find libfolly.so automatically.
