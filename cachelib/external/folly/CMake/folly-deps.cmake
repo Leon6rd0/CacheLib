@@ -18,10 +18,6 @@ include(CheckIncludeFileCXX)
 include(CheckFunctionExists)
 include(CMakePushCheckState)
 
-add_compile_definitions(FOLLY_USE_BOOST_CONTEXT=0)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFOLLY_USE_BOOST_CONTEXT=0")
-
 set(
   BOOST_LINK_STATIC "auto"
   CACHE STRING
@@ -73,7 +69,7 @@ endmacro()
 
 # 手动创建所有 Folly 可能用到的 Boost 组件
 # 注意：即使 Folly 原本没列出这么多，多写几个不报错，防止隐式依赖
-# manual_boost_target(context          context)
+manual_boost_target(context          context)
 manual_boost_target(filesystem       filesystem)
 manual_boost_target(program_options  program_options)
 manual_boost_target(regex            regex)
@@ -84,7 +80,7 @@ manual_boost_target(chrono           chrono)
 
 # 汇总变量 (Folly 的 CMakeLists.txt 需要用到这几个变量)
 set(Boost_LIBRARIES
-    # Boost::context
+    Boost::context
     Boost::filesystem
     Boost::program_options
     Boost::regex
@@ -268,7 +264,7 @@ macro(manual_boost_target name libname)
     endif()
 endmacro()
 
-#manual_boost_target(context          context)
+manual_boost_target(context          context)
 manual_boost_target(filesystem       filesystem)
 manual_boost_target(program_options  program_options)
 manual_boost_target(regex            regex)
@@ -277,7 +273,7 @@ manual_boost_target(thread           thread)
 manual_boost_target(atomic           atomic)
 manual_boost_target(chrono           chrono)
 
-set(Boost_LIBRARIES Boost::filesystem Boost::program_options Boost::regex Boost::system Boost::thread Boost::atomic Boost::chrono)
+set(Boost_LIBRARIES Boost::context Boost::filesystem Boost::program_options Boost::regex Boost::system Boost::thread Boost::atomic Boost::chrono)
 
 list(APPEND FOLLY_LINK_LIBRARIES ${Boost_LIBRARIES})
 list(APPEND FOLLY_INCLUDE_DIRECTORIES ${Boost_INCLUDE_DIRS})
