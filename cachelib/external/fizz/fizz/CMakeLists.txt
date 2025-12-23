@@ -55,7 +55,44 @@ find_package(fmt CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 find_package(Glog REQUIRED)
 find_package(Threads REQUIRED)
-find_package(Zstd REQUIRED)
+#find_package(Zstd REQUIRED)
+
+# ==========================================================
+# 🚀 手动配置 Zstd (指向之前编译好的路径)
+message(STATUS ">> Manual: Configuring Zstd for Fizz <<")
+
+# 设置路径 (根据之前的 Zstd 安装日志)
+set(ZSTD_INCLUDE_DIR "/root/CacheLib/opt/cachelib/include")
+set(ZSTD_LIBRARY "/root/CacheLib/opt/cachelib/lib64/libzstd.so")
+
+# 1. 设置 Fizz 可能用到的变量
+set(Zstd_FOUND TRUE)
+set(ZSTD_FOUND TRUE)
+set(ZSTD_LIBRARIES ${ZSTD_LIBRARY})
+set(ZSTD_INCLUDE_DIRS ${ZSTD_INCLUDE_DIR})
+
+# 2. 创建导入目标 (Imported Target)
+# Fizz 内部通常会链接 zstd::zstd 或者类似的目标
+if(NOT TARGET zstd::zstd)
+    add_library(zstd::zstd UNKNOWN IMPORTED)
+    set_target_properties(zstd::zstd PROPERTIES
+        IMPORTED_LOCATION "${ZSTD_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${ZSTD_INCLUDE_DIR}"
+    )
+endif()
+
+# 有些 FB 项目也会用这个名字
+if(NOT TARGET Zstd::Zstd)
+    add_library(Zstd::Zstd UNKNOWN IMPORTED)
+    set_target_properties(Zstd::Zstd PROPERTIES
+        IMPORTED_LOCATION "${ZSTD_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${ZSTD_INCLUDE_DIR}"
+    )
+endif()
+
+message(STATUS ">> Manual: Zstd Configured Successfully <<")
+# ==========================================================
+
 if (UNIX AND NOT APPLE)
   find_package(Librt)
 endif()
