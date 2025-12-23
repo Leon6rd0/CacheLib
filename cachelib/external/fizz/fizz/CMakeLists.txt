@@ -46,6 +46,56 @@ set(CMAKE_INSTALL_DIR lib/cmake/fizz CACHE STRING "The subdirectory where CMake 
 # 🚀 核心依赖配置 (Folly, Fmt, OpenSSL)
 # ==========================================================
 # Folly 和 Fmt 之前的日志显示能找到，这里保留原样
+
+# ==========================================================
+# 🚀 [CRITICAL] 必须在 find_package(folly) 之前定义 Boost
+#    Folly 依赖 Boost::system/context 等目标，必须先伪造出来
+# ==========================================================
+message(STATUS ">> PRE-DEFINING BOOST TARGETS FOR FOLLY <<")
+
+set(SYS_INC "/usr/include")
+set(SYS_LIB "/usr/lib")
+
+# 定义 Boost 宏
+macro(manual_boost_target name libname)
+    if(NOT TARGET Boost::${name})
+        add_library(Boost::${name} UNKNOWN IMPORTED)
+        set_target_properties(Boost::${name} PROPERTIES
+            IMPORTED_LOCATION "${SYS_LIB}/libboost_${libname}.so"
+            INTERFACE_INCLUDE_DIRECTORIES "${SYS_INC}"
+        )
+    endif()
+endmacro()
+
+# 1. 创建所有 Boost 组件的目标
+manual_boost_target(filesystem       filesystem)
+manual_boost_target(program_options  program_options)
+manual_boost_target(regex            regex)
+manual_boost_target(system           system)
+manual_boost_target(thread           thread)
+manual_boost_target(atomic           atomic)
+manual_boost_target(chrono           chrono)
+
+# ✨ 这里把 context 加回来！(因为你已经手动编译了)
+manual_boost_target(context          context)
+
+# 2. 骗过 CMake，让它以为 Boost 已经找到了
+set(Boost_FOUND TRUE)
+set(Boost_INCLUDE_DIRS "${SYS_INC}")
+set(Boost_LIBRARIES
+    Boost::context
+    Boost::filesystem
+    Boost::program_options
+    Boost::regex
+    Boost::system
+    Boost::thread
+    Boost::atomic
+    Boost::chrono
+)
+
+message(STATUS ">> Boost Targets Pre-defined Successfully <<")
+# ==========================================================
+
 find_package(folly CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
