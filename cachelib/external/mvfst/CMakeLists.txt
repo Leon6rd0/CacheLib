@@ -78,11 +78,8 @@ set(Boost_LIBRARIES
 set(Sodium_FOUND TRUE)
 set(SODIUM_FOUND TRUE)
 set(sodium_INCLUDE_DIR "/usr/include")
+set(SODIUM_LIBRARY "/usr/lib/libsodium.so")
 set(SODIUM_LIBRARIES "/usr/lib/libsodium.so")
-if(NOT TARGET sodium)
-  add_library(sodium UNKNOWN IMPORTED)
-  set_target_properties(sodium PROPERTIES IMPORTED_LOCATION "${SODIUM_LIBRARIES}" INTERFACE_INCLUDE_DIRECTORIES "${sodium_INCLUDE_DIR}")
-endif()
 
 # ==============================================================================
 # 🚀 [关键步骤] 手动配置 Gflags / Glog
