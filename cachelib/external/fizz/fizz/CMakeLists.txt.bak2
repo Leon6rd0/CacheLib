@@ -9,18 +9,6 @@ endif()
 
 project("fizz" VERSION ${PACKAGE_VERSION} LANGUAGES CXX C)
 
-# ------------------------------------------------------------------------------
-# 🛠️ [优化] 动态计算依赖路径 (彻底告别绝对路径)
-# ------------------------------------------------------------------------------
-# 当前目录是: .../CacheLib/cachelib/external/fizz/fizz
-# 我们需要:   .../CacheLib/opt/cachelib
-# 需要向上跳 4 层 (cachelib/external/fizz/fizz -> cachelib/external/fizz -> cachelib/external -> cachelib -> root)
-get_filename_component(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
-set(LOCAL_DEPS_DIR "${REPO_ROOT}/opt/cachelib")
-
-message(STATUS ">> Repo Root detected at: ${REPO_ROOT}")
-message(STATUS ">> Local Deps dir set to: ${LOCAL_DEPS_DIR}")
-
 if (NOT DEFINED CPACK_GENERATOR)
   set(CPACK_GENERATOR "RPM")
 endif()
@@ -40,6 +28,10 @@ set(CMAKE_MODULE_PATH
   "${CMAKE_CURRENT_SOURCE_DIR}/../build/fbcode_builder/CMake"
   ${CMAKE_MODULE_PATH})
 
+# 🚫 已注释 (Buildroot 不需要这个)
+# include(FBBuildOptions)
+# fb_activate_static_library_option()
+
 SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -51,7 +43,13 @@ set(BIN_INSTALL_DIR bin CACHE STRING "The subdirectory where binaries should be 
 set(CMAKE_INSTALL_DIR lib/cmake/fizz CACHE STRING "The subdirectory where CMake package config files should be installed")
 
 # ==========================================================
+# 🚀 核心依赖配置 (Folly, Fmt, OpenSSL)
+# ==========================================================
+# Folly 和 Fmt 之前的日志显示能找到，这里保留原样
+
+# ==========================================================
 # 🚀 [CRITICAL] 必须在 find_package(folly) 之前定义 Boost
+#    Folly 依赖 Boost::system/context 等目标，必须先伪造出来
 # ==========================================================
 message(STATUS ">> PRE-DEFINING BOOST TARGETS FOR FOLLY <<")
 
@@ -77,9 +75,11 @@ manual_boost_target(system           system)
 manual_boost_target(thread           thread)
 manual_boost_target(atomic           atomic)
 manual_boost_target(chrono           chrono)
-manual_boost_target(context          context) # 手搓的 context
 
-# 2. 骗过 CMake
+# ✨ 这里把 context 加回来！(因为你已经手动编译了)
+manual_boost_target(context          context)
+
+# 2. 骗过 CMake，让它以为 Boost 已经找到了
 set(Boost_FOUND TRUE)
 set(Boost_INCLUDE_DIRS "${SYS_INC}")
 set(Boost_LIBRARIES
@@ -112,28 +112,28 @@ set(GLOG_FOUND TRUE)
 set(GLOG_INCLUDE_DIRS "/usr/include")
 set(GLOG_LIBRARIES "/usr/lib/libglog.so")
 
-# 2. Sodium
+# 2. Sodium (你之前 SCP 进去的)
 message(STATUS ">> Manual: Sodium")
 set(Sodium_FOUND TRUE)
 set(SODIUM_FOUND TRUE)
-set(sodium_INCLUDE_DIR "/usr/include")
+set(sodium_INCLUDE_DIR "/usr/include") # 注意大小写匹配 Fizz 源码习惯
 set(SODIUM_INCLUDE_DIRS "/usr/include")
 set(SODIUM_LIBRARIES "/usr/lib/libsodium.so")
+# 创建 target 防止报错
 if(NOT TARGET sodium)
   add_library(sodium UNKNOWN IMPORTED)
   set_target_properties(sodium PROPERTIES IMPORTED_LOCATION "${SODIUM_LIBRARIES}" INTERFACE_INCLUDE_DIRECTORIES "${SODIUM_INCLUDE_DIRS}")
 endif()
 set(FIZZ_HAVE_SODIUM ON)
 
-# 3. Zstd (✨ 使用动态路径 ✨)
+# 3. Zstd (复用你之前的配置)
 message(STATUS ">> Manual: Zstd")
-set(ZSTD_INCLUDE_DIR "${LOCAL_DEPS_DIR}/include")
-set(ZSTD_LIBRARY "${LOCAL_DEPS_DIR}/lib64/libzstd.so") # 如果是 lib 目录请自行修改
+set(ZSTD_INCLUDE_DIR "/root/CacheLib/opt/cachelib/include")
+set(ZSTD_LIBRARY "/root/CacheLib/opt/cachelib/lib64/libzstd.so")
 set(Zstd_FOUND TRUE)
 set(ZSTD_FOUND TRUE)
 set(ZSTD_LIBRARIES ${ZSTD_LIBRARY})
 set(ZSTD_INCLUDE_DIRS ${ZSTD_INCLUDE_DIR})
-
 if(NOT TARGET zstd::zstd)
   add_library(zstd::zstd UNKNOWN IMPORTED)
   set_target_properties(zstd::zstd PROPERTIES IMPORTED_LOCATION "${ZSTD_LIBRARY}" INTERFACE_INCLUDE_DIRECTORIES "${ZSTD_INCLUDE_DIR}")
@@ -174,6 +174,7 @@ endif()
 
 include(CheckAtomic)
 
+# 初始化变量
 SET(FIZZ_SHINY_DEPENDENCIES "")
 SET(FIZZ_LINK_LIBRARIES "")
 SET(FIZZ_INCLUDE_DIRECTORIES "")
@@ -188,6 +189,7 @@ list(APPEND CMAKE_REQUIRED_INCLUDES ${LIBGFLAGS_INCLUDE_DIR})
 list(APPEND FIZZ_LINK_LIBRARIES ${LIBEVENT_LIB})
 list(APPEND FIZZ_INCLUDE_DIRECTORIES ${LIBEVENT_INCLUDE_DIR})
 
+# 可选依赖
 find_package(liboqs 0.11.0 CONFIG)
 if (liboqs_FOUND)
   set(FIZZ_HAVE_OQS TRUE)
@@ -204,6 +206,7 @@ include(FizzSources)
 configure_file(fizz-config.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/fizz/fizz-config.h)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/fizz/fizz-config.h DESTINATION ${INCLUDE_INSTALL_DIR}/fizz/)
 
+# 定义 Header 目录
 set(FIZZ_HEADER_DIRS
   backend
   backend/liboqs
@@ -322,7 +325,16 @@ install(EXPORT fizz-exports
         DESTINATION ${CMAKE_INSTALL_DIR})
 
 # ==========================================================
-# 🛑 强制关闭测试和示例
+# 🛑 强制关闭测试和示例 (Buildroot 环境下不要开，省时省内存)
 # ==========================================================
 option(BUILD_TESTS "BUILD_TESTS" OFF)
 option(BUILD_EXAMPLES "BUILD_EXAMPLES" OFF)
+
+# 下面的代码是测试相关的，因为上面设为 OFF，所以会被跳过
+if(BUILD_TESTS)
+  # ... (省略测试代码) ...
+endif()
+
+if(BUILD_EXAMPLES)
+  # ... (省略示例代码) ...
+endif()
