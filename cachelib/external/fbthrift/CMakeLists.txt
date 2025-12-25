@@ -75,11 +75,13 @@ manual_boost_target(context          context)  # 你的手搓 Context
 manual_boost_target(atomic           atomic)
 manual_boost_target(chrono           chrono)
 manual_boost_target(regex            regex)
+manual_boost_target(iostreams        iostreams)
+manual_boost_target(date_time        date_time)
 
 set(Boost_FOUND TRUE)
 set(Boost_INCLUDE_DIRS "${SYS_INC}")
 # 骗过 CMake 的组件检查
-set(Boost_LIBRARIES Boost::filesystem Boost::program_options Boost::system Boost::thread Boost::context Boost::atomic Boost::chrono Boost::regex)
+set(Boost_LIBRARIES Boost::filesystem Boost::program_options Boost::system Boost::thread Boost::context Boost::atomic Boost::chrono Boost::regex Boost::iostreams Boost::date_time)
 
 # ==============================================================================
 # 🚀 [关键] 手动配置依赖 (Glog, Gflags, Zstd, Sodium, OpenSSL)
