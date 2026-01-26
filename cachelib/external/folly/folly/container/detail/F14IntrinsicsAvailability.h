@@ -15,7 +15,7 @@
  */
 
 #pragma once
-
+#define FOLLY_F14_VECTOR_INTRINSICS_AVAILABLE 0
 #include <folly/Portability.h>
 
 #if defined(FOLLY_F14_FALLBACK_DISABLED) && FOLLY_F14_FALLBACK_DISABLED == 1
